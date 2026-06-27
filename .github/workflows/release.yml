@@ -2,7 +2,7 @@ name: Build & Release NuGet
 
 on:
   push:
-    branches: [nexusflow]
+    branches: [main]
     tags:
       - 'v*.*.*'
   workflow_dispatch:
