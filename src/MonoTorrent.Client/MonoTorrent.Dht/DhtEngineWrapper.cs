@@ -65,6 +65,14 @@ namespace MonoTorrent.Client
             engine.PeersFound += (o, e) => PeersFound?.Invoke (this, e);
         }
 
+        // BEP 42: delegate external IP to enable compliant node ID generation
+        internal void SetExternalIp (System.Net.IPAddress externalIp)
+            => Engine.SetExternalIp (externalIp);
+
+        // BEP 43: delegate read-only mode to the inner DhtEngine
+        internal void SetReadOnly (bool value)
+            => Engine.SetReadOnly (value);
+
         public bool TryEnqueueAnnounce (InfoHashes infoHashes, int port, CancellationToken token)
         {
             if (infoHashes is null)

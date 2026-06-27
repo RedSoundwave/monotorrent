@@ -31,6 +31,7 @@ namespace MonoTorrent.Logging
 {
     public interface ILogger
     {
+        bool IsEnabled { get; }
         void Info (string message);
         void Debug (string message);
         void Error (string message);

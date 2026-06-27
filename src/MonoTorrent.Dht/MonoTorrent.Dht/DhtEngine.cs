@@ -31,6 +31,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading.Channels;
@@ -97,6 +98,9 @@ namespace MonoTorrent.Dht
 
         public bool Disposed { get; private set; }
 
+        /// <summary>BEP 43: when true, adds ro=1 to outgoing queries and we are not added to other routing tables.</summary>
+        public bool IsReadOnly { get; private set; }
+
         public ITransferMonitor Monitor { get; }
 
         public TimeSpan MinimumAnnounceInterval => DefaultMinimumAnnounceInterval;
@@ -108,7 +112,7 @@ namespace MonoTorrent.Dht
         internal MessageLoop MessageLoop { get; }
         public int NodeCount => RoutingTable.CountNodes ();
         IEnumerable<Node> PendingNodes { get; set; }
-        internal RoutingTable RoutingTable { get; }
+        internal RoutingTable RoutingTable { get; private set; }
         internal TokenManager TokenManager { get; }
         internal Dictionary<NodeId, List<Node>> Torrents { get; }
 
@@ -150,10 +154,26 @@ namespace MonoTorrent.Dht
             }
         }
 
+        public void SetReadOnly (bool value)
+            => IsReadOnly = value;
+
+        /// <summary>BEP 42: regenerate our local node ID to be compliant with the given external IP address.</summary>
+        public void SetExternalIp (IPAddress externalIp)
+        {
+            if (externalIp == null || State != DhtState.NotReady)
+                return;
+            var newId = Bep42.CreateNodeId (externalIp);
+            var newTable = new RoutingTable (newId);
+            foreach (var bucket in RoutingTable.Buckets)
+                foreach (var node in bucket.Nodes)
+                    newTable.Add (node);
+            RoutingTable = newTable;
+        }
+
         internal void Add (Node node)
         {
             var id = TransactionId.NextId ();
-            var query = KrpcMessageEncoder.EncodePing (id, RoutingTable.LocalNodeId.Span);
+            var query = KrpcMessageEncoder.EncodePing (id, RoutingTable.LocalNodeId.Span, IsReadOnly);
             SendQueryAsync (query, node, null);
         }
 

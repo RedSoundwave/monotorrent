@@ -65,7 +65,7 @@
       <PackageLicenseFile>LICENSE</PackageLicenseFile>
       <PackageProjectUrl>https://github.com/RedSoundwave/monotorrent</PackageProjectUrl>
       <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-      <PackageVersion>3.9.2-nexusflow</PackageVersion>
+      <PackageVersion>3.9.3-nexusflow</PackageVersion>
       <PackageTags>bittorrent;torrent;library;tracker;dht;c#;csharp;dotnet;.NET;p2p</PackageTags>
 
       <IncludeSource>true</IncludeSource>

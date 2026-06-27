@@ -203,6 +203,7 @@ namespace MonoTorrent.Connections.Tracker
                     TorrentEvent.Started => "started",
                     TorrentEvent.Stopped => "stopped",
                     TorrentEvent.Completed => "completed",
+                    TorrentEvent.Paused => "paused",
                     _ => throw new NotSupportedException ()
                 };
                 b.Add ("event", eventString);
@@ -263,6 +264,7 @@ namespace MonoTorrent.Connections.Tracker
             TimeSpan? minUpdateInterval = null, updateInterval = null;
             string failureMessage = "", warningMessage = "";
             var peers = new List<PeerInfo> ();
+            IPAddress? externalIP = null;
             foreach (KeyValuePair<BEncodedString, BEncodedValue> keypair in dict) {
                 switch (keypair.Key.Text) {
                     case ("complete"):
@@ -303,6 +305,15 @@ namespace MonoTorrent.Connections.Tracker
                             peers.AddRange (PeerInfo.FromCompact (bencodedStr.Span, AddressFamily.InterNetworkV6));
                         break;
 
+                    case ("external ip"):
+                        // BEP 24: tracker reports our external IP as 4 (IPv4) or 16 (IPv6) raw bytes
+                        if (keypair.Value is BEncodedString externalIpBytes) {
+                            var span = externalIpBytes.Span;
+                            if (span.Length == 4 || span.Length == 16)
+                                externalIP = new IPAddress (span);
+                        }
+                        break;
+
                     case ("failure reason"):
                         failureMessage = ((BEncodedString) keypair.Value).Text;
                         break;
@@ -324,7 +335,8 @@ namespace MonoTorrent.Connections.Tracker
                 updateInterval: updateInterval,
                 scrapeInfo: new Dictionary<InfoHash, ScrapeInfo> { { infoHash, new ScrapeInfo (complete, downloaded, incomplete) } },
                 warningMessage: warningMessage,
-                failureMessage: failureMessage
+                failureMessage: failureMessage,
+                externalIP: externalIP
             );
         }
 

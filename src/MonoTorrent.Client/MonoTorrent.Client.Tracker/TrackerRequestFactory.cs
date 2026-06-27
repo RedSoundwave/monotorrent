@@ -66,6 +66,12 @@ namespace MonoTorrent.Trackers
             requireEncryption = requireEncryption && ClientEngine.SupportsEncryption;
             supportsEncryption = supportsEncryption && ClientEngine.SupportsEncryption;
 
+            // BEP 21: partial seeds advertise event=paused on periodic announces
+            if (clientEvent == TorrentEvent.None && Manager.HasMetadata && !Manager.Complete
+                    && Manager.PartialProgressSelector.TrueCount > 0
+                    && Manager.Bitfield.CountTrue (Manager.PartialProgressSelector) == Manager.PartialProgressSelector.TrueCount)
+                clientEvent = TorrentEvent.Paused;
+
             // FIXME: In metadata mode we need to pretend we need to download data otherwise
             // tracker optimisations might result in no peers being sent back.
             long bytesLeft = 1000;

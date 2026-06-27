@@ -1,6 +1,6 @@
 # MonoTorrent — NexusFlow Edition
 
-[![NuGet](https://img.shields.io/badge/nuget-3.9.1--nexusflow-blue)](https://github.com/RedSoundwave/monotorrent/packages)
+[![NuGet](https://img.shields.io/badge/nuget-3.9.3--nexusflow-blue)](https://github.com/RedSoundwave/monotorrent/packages)
 [![Build](https://github.com/RedSoundwave/monotorrent/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/RedSoundwave/monotorrent/actions/workflows/release.yml)
 
 A maintained fork of [MonoTorrent](https://github.com/alanmcgovern/monotorrent) for use in the NexusFlow plugin ecosystem. Tracks upstream `master` and adds APIs needed by the downloader plugin.
@@ -13,15 +13,22 @@ A maintained fork of [MonoTorrent](https://github.com/alanmcgovern/monotorrent) 
 | Enumerate connected peers | `TorrentManager.Peers.ActiveConnections` | — |
 | Disconnect a peer | `PeerId.Disconnect()` | — |
 | Piece retraction (lt_donthave) | handled automatically | [BEP 54](https://www.bittorrent.org/beps/bep_0054.html) |
+| External IP from tracker | `AnnounceResponse.ExternalIP` | [BEP 24](https://www.bittorrent.org/beps/bep_0024.html) |
+| Partial seed tracker event | `event=paused` sent automatically | [BEP 21](https://www.bittorrent.org/beps/bep_0021.html) |
+| DHT read-only mode | `EngineSettingsBuilder.DhtReadOnly = true` | [BEP 43](https://www.bittorrent.org/beps/bep_0043.html) |
+| DHT secure node ID (CRC32C) | derived from BEP 24 external IP automatically | [BEP 42](https://www.bittorrent.org/beps/bep_0042.html) |
+| Global tracker injection | `EngineSettingsBuilder.GlobalTrackers` | — |
+| SOCKS5 proxy for peers | `EngineSettingsBuilder.SocksProxy = new IPEndPoint(...)` | — |
+| Logger IsEnabled guard | skip formatting when logging off | — |
 
 ## NuGet
 
-Package: `MonoTorrent` `[3.9.1-nexusflow]`
+Package: `MonoTorrent` `[3.9.3-nexusflow]`
 
 Feed: `https://nuget.pkg.github.com/RedSoundwave/index.json`
 
 ```xml
-<PackageReference Include="MonoTorrent" Version="[3.9.1-nexusflow]" />
+<PackageReference Include="MonoTorrent" Version="[3.9.3-nexusflow]" />
 ```
 
 ## Supported Specifications
@@ -31,9 +38,13 @@ Full list: [bittorrent.org/beps/bep_0000.html](http://www.bittorrent.org/beps/be
 ### Final / Active
 * BEP 3  — [The BitTorrent Protocol Specification](https://www.bittorrent.org/beps/bep_0003.html)
 * BEP 20 — [Peer ID Conventions](http://www.bittorrent.org/beps/bep_0020.html)
+* BEP 21 — [Extension for partial seeds](https://www.bittorrent.org/beps/bep_0021.html) *(NexusFlow addition)*
+* BEP 24 — [Tracker Returns External IP](https://www.bittorrent.org/beps/bep_0024.html) *(NexusFlow addition)*
 
 ### Accepted
 * BEP 5  — [DHT Protocol](http://www.bittorrent.org/beps/bep_0005.html)
+* BEP 42 — [DHT Security Extension](https://www.bittorrent.org/beps/bep_0042.html) *(NexusFlow addition)*
+* BEP 43 — [Read-only DHT Nodes](https://www.bittorrent.org/beps/bep_0043.html) *(NexusFlow addition)*
 * BEP 6  — [Fast Extension](http://www.bittorrent.org/beps/bep_0006.html)
 * BEP 7  — [IPv6 Tracker Extension](http://www.bittorrent.org/beps/bep_0007.html)
 * BEP 9  — [Extension for Peers to Send Metadata Files](http://www.bittorrent.org/beps/bep_0009.html)

@@ -72,7 +72,7 @@ namespace MonoTorrent.Dht.Tasks
             foreach (Node n in nodes) {
                 if (n.Token != null) {
                     var id = TransactionId.NextId ();
-                    var query = KrpcMessageEncoder.EncodeAnnouncePeer (id, engine.LocalId, infoHash.Span, ((BEncodedString) n.Token).Span, port, false);
+                    var query = KrpcMessageEncoder.EncodeAnnouncePeer (id, engine.LocalId, infoHash.Span, ((BEncodedString) n.Token).Span, port, false, engine.IsReadOnly);
                     engine.SendQueryAsync (query, n, channel.Writer);
                     pending++;
                 }

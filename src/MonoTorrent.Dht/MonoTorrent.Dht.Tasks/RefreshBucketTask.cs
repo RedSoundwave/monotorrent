@@ -58,7 +58,7 @@ namespace MonoTorrent.Dht.Tasks
             });
             foreach (Node node in bucket.Nodes.ToArray ()) {
                 var transactionId = TransactionId.NextId ();
-                var message = KrpcMessageEncoder.EncodeFindNode (transactionId, engine.LocalId, node.Id.Span);
+                var message = KrpcMessageEncoder.EncodeFindNode (transactionId, engine.LocalId, node.Id.Span, engine.IsReadOnly);
 
                 engine.SendQueryAsync (message, node, channel.Writer);
                 SendQueryEventArgs args = await channel.Reader.ReadAsync ();

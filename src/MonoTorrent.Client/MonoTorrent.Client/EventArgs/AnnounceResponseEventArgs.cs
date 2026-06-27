@@ -28,22 +28,31 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 
 namespace MonoTorrent.Trackers
 {
     public class AnnounceResponseEventArgs : TrackerResponseEventArgs
     {
+        /// <summary>BEP 24: external IP address reported by the tracker, or null if not provided.</summary>
+        public IPAddress? ExternalIP { get; }
         public IDictionary<InfoHash, IList<PeerInfo>> Peers { get; }
 
         public AnnounceResponseEventArgs (ITracker tracker, bool successful)
-            : this (tracker, successful, new Dictionary<InfoHash, IList<PeerInfo>> ())
+            : this (tracker, successful, new Dictionary<InfoHash, IList<PeerInfo>> (), null)
         {
 
         }
 
         public AnnounceResponseEventArgs (ITracker tracker, bool successful, Dictionary<InfoHash, IList<PeerInfo>> peers)
+            : this (tracker, successful, peers, null)
+        {
+        }
+
+        public AnnounceResponseEventArgs (ITracker tracker, bool successful, Dictionary<InfoHash, IList<PeerInfo>> peers, IPAddress? externalIP)
             : base (tracker, successful)
         {
+            ExternalIP = externalIP;
             Peers = peers;
         }
     }

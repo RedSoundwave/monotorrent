@@ -142,6 +142,16 @@ namespace MonoTorrent.Client
         public List<BootstrapRouter> DhtBootstrapRouters { get; set; }
 
         /// <summary>
+        /// When true the DHT engine runs in read-only mode (BEP 43).
+        /// </summary>
+        public bool DhtReadOnly { get; set; }
+
+        /// <summary>
+        /// Tracker URIs injected into every non-private torrent at announce time.
+        /// </summary>
+        public List<string> GlobalTrackers { get; set; }
+
+        /// <summary>
         /// Creates a cache which buffers data before it's written to the disk, or after it's been read from disk.
         /// Set to 0 to disable the cache.
         /// Defaults to 5MB.
@@ -297,6 +307,12 @@ namespace MonoTorrent.Client
         public bool UsePartialFiles { get; set; }
 
         /// <summary>
+        /// If set, all outgoing peer connections are routed through this SOCKS5 proxy (BEP #704).
+        /// Defaults to <see langword="null"/> (no proxy).
+        /// </summary>
+        public IPEndPoint? SocksProxy { get; set; }
+
+        /// <summary>
         /// The timeout used when connecting to a WebSeed's HTTP endpoint.
         /// </summary>
         public TimeSpan WebSeedConnectionTimeout {
@@ -343,6 +359,8 @@ namespace MonoTorrent.Client
             ConnectionTimeouts = new List<TimeSpan> (settings.ConnectionTimeouts);
             DhtBootstrapRouters = new List<BootstrapRouter> (settings.DhtBootstrapRouters);
             DhtEndPoint = settings.DhtEndPoint;
+            DhtReadOnly = settings.DhtReadOnly;
+            GlobalTrackers = new List<string> (settings.GlobalTrackers);
             DiskCacheBytes = settings.DiskCacheBytes;
             DiskCachePolicy = settings.DiskCachePolicy;
             FastResumeMode = settings.FastResumeMode;
@@ -357,6 +375,7 @@ namespace MonoTorrent.Client
             MaximumHalfOpenConnections = settings.MaximumHalfOpenConnections;
             MaximumOpenFiles = settings.MaximumOpenFiles;
             MaximumUploadRate = settings.MaximumUploadRate;
+            SocksProxy = settings.SocksProxy;
             StaleRequestTimeout = settings.StaleRequestTimeout;
             UsePartialFiles = settings.UsePartialFiles;
             WebSeedConnectionTimeout = settings.WebSeedConnectionTimeout;
@@ -403,10 +422,12 @@ namespace MonoTorrent.Client
                 connectionTimeouts: ConnectionTimeouts,
                 dhtBootstrapRouters : DhtBootstrapRouters,
                 dhtEndPoint: DhtEndPoint,
+                dhtReadOnly: DhtReadOnly,
                 diskCacheBytes: DiskCacheBytes,
                 diskCachePolicy: DiskCachePolicy,
                 fastResumeMode: FastResumeMode,
                 fileCreationMode: FileCreationMode,
+                globalTrackers: GlobalTrackers ?? new List<string> (),
                 httpStreamingPrefix: HttpStreamingPrefix,
                 listenEndPoints: ListenEndPoints,
                 maximumConnections: MaximumConnections,
@@ -417,6 +438,7 @@ namespace MonoTorrent.Client
                 maximumOpenFiles: MaximumOpenFiles,
                 maximumUploadRate: MaximumUploadRate,
                 reportedListenEndPoints: ReportedListenEndPoints,
+                socksProxy: SocksProxy,
                 staleRequestTimeout: StaleRequestTimeout,
                 usePartialFiles: UsePartialFiles,
                 webSeedConnectionTimeout: WebSeedConnectionTimeout,

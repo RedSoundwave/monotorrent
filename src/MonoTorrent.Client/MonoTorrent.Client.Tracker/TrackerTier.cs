@@ -158,7 +158,7 @@ namespace MonoTorrent.Trackers
                     var response = await DoAnnounceAsync (args, tracker, token);
                     if (response.State == TrackerState.Ok) {
                         var dict = response.Peers;
-                        AnnounceComplete?.Invoke (this, new AnnounceResponseEventArgs (tracker, true, dict));
+                        AnnounceComplete?.Invoke (this, new AnnounceResponseEventArgs (tracker, true, dict, response.ExternalIP));
                         LastAnnounce = ValueStopwatch.StartNew ();
                         LastAnnounceSucceeded = true;
                         logger.InfoFormatted ("Announced to {0}", tracker.Uri);

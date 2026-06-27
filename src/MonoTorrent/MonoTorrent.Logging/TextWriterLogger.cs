@@ -33,6 +33,8 @@ namespace MonoTorrent.Logging
 {
     public class TextWriterLogger : IRootLogger
     {
+        public bool IsEnabled => true;
+
         TextWriter Writer { get; }
 
         public TextWriterLogger (TextWriter writer)

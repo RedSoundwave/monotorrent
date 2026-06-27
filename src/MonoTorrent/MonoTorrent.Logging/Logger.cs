@@ -39,6 +39,8 @@ namespace MonoTorrent.Logging
     {
         public string Name { get; }
 
+        public bool IsEnabled => LoggerFactory.RootLogger.IsEnabled;
+
         public Logger(string name)
             => Name = name;
 

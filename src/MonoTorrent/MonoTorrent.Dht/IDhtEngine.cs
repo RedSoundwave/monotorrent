@@ -30,6 +30,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Net;
 using System.Threading.Tasks;
 
 using MonoTorrent.Connections.Dht;
@@ -80,6 +81,8 @@ namespace MonoTorrent.Dht
         ReusableTask<ReadOnlyMemory<byte>> SaveNodesAsync ();
         ReusableTask SetBootstrapRoutersAsync (IEnumerable<BootstrapRouter> routers);
         ReusableTask SetListenerAsync (IDhtListener listener);
+        void SetExternalIp (IPAddress externalIp);
+        void SetReadOnly (bool value);
         ReusableTask StartAsync ();
         ReusableTask StartAsync (ReadOnlyMemory<byte> initialNodes);
         ReusableTask StopAsync ();

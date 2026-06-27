@@ -236,7 +236,7 @@ namespace MonoTorrent.Dht
                         //Console.WriteLine ("S: " + Encoding.UTF8.GetString (details.Message.Span));
                         await Listener.SendAsync (details.Message, details.Destination);
                     } catch (Exception ex) {
-                        Logger.Error (string.Format ("failed to send a message: {0}", ex));
+                        if (Logger.IsEnabled) Logger.Error (string.Format ("failed to send a message: {0}", ex));
 
                         // Mark it ineligible for retries and also make it time out immediately.
                         details.RemainingRetries = 0;
@@ -245,7 +245,7 @@ namespace MonoTorrent.Dht
                     }
                 }
             } catch (Exception ex) {
-                Logger.Error (string.Format ("Unexpected error sending pending messages to peers: {0}", ex));
+                if (Logger.IsEnabled) Logger.Error (string.Format ("Unexpected error sending pending messages to peers: {0}", ex));
             } finally {
                 ProcessingSendQueue = false;
             }
@@ -320,7 +320,7 @@ namespace MonoTorrent.Dht
                         if (!v.Channel.TryWrite (new SendQueryEventArgs (v.Node!, v.Destination, v.Message)))
                             Logger.Error ("Failed to write timeout result to the unbounded channel");
                     } catch (Exception ex) {
-                        Logger.Error (string.Format ("unexpected error writing a result to the response chanenl: {0}", ex));
+                        if (Logger.IsEnabled) Logger.Error (string.Format ("unexpected error writing a result to the response channel: {0}", ex));
                     }
                 }
 
@@ -366,7 +366,9 @@ namespace MonoTorrent.Dht
                 Node? node = Engine.RoutingTable.FindNode (new NodeId (rawResponse.NodeId));
                 if (node == null) {
                     node = query.Node ?? new Node (new NodeId (rawResponse.NodeId), source);
-                    Engine.RoutingTable.Add (node);
+                    // BEP 43: do not add read-only nodes to our routing table
+                    if (!rawResponse.IsReadOnly)
+                        Engine.RoutingTable.Add (node);
                 }
                 node.Seen ();
 

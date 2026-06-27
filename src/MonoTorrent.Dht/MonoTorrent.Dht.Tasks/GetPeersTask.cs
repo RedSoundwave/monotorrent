@@ -73,7 +73,7 @@ namespace MonoTorrent.Dht.Tasks
             var closestNodes = Engine.RoutingTable.GetClosest (InfoHash);
             foreach (Node node in closestNodes) {
                 var transactionId = TransactionId.NextId ();
-                var query = KrpcMessageEncoder.EncodeGetPeers (transactionId, Engine.LocalId, InfoHash.Span);
+                var query = KrpcMessageEncoder.EncodeGetPeers (transactionId, Engine.LocalId, InfoHash.Span, Engine.IsReadOnly);
                 Engine.SendQueryAsync (query, node, getPeersChannel.Writer);
                 pendingGetPeers++;
             }
@@ -105,7 +105,7 @@ namespace MonoTorrent.Dht.Tasks
                     foreach (Node node in Node.FromCompactNodes (response.Response.Nodes))
                         if (closestNodes.Add (node)) {
                             var transactionId = TransactionId.NextId ();
-                            var getPeers = KrpcMessageEncoder.EncodeGetPeers (transactionId, Engine.LocalId, InfoHash.Span);
+                            var getPeers = KrpcMessageEncoder.EncodeGetPeers (transactionId, Engine.LocalId, InfoHash.Span, Engine.IsReadOnly);
                             Engine.SendQueryAsync (getPeers, node, getPeersChannel.Writer);
                             pendingGetPeers++;
                         }

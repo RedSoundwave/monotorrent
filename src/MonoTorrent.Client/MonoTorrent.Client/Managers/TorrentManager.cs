@@ -484,7 +484,15 @@ namespace MonoTorrent.Client
                 if (magnetLink?.AnnounceUrls != null)
                     announces.Add (magnetLink.AnnounceUrls);
             }
-            TrackerManager = new TrackerManager (engine.Factories, engine.TrackerAnnounceLimiter, new TrackerRequestFactory (this), announces, torrent?.IsPrivate ?? false);
+            // #591 — inject engine-wide supplemental trackers into non-private torrents
+            bool isPrivate = torrent?.IsPrivate ?? false;
+            if (!isPrivate && engine.Settings.GlobalTrackers.Count > 0) {
+                var allAnnounces = new List<IList<string>> (announces);
+                foreach (var url in engine.Settings.GlobalTrackers)
+                    allAnnounces.Add (new[] { url });
+                announces = allAnnounces;
+            }
+            TrackerManager = new TrackerManager (engine.Factories, engine.TrackerAnnounceLimiter, new TrackerRequestFactory (this), announces, isPrivate);
             SetTrackerManager (TrackerManager);
 
             PendingV2PieceHashes = new BitField (Torrent != null ? Torrent.PieceCount : 1).SetAll (true);
@@ -1253,6 +1261,10 @@ namespace MonoTorrent.Client
         {
             if (e.Successful) {
                 await ClientEngine.MainLoop;
+
+                // BEP 24 + BEP 42: inform DHT engine of our external IP so it can derive a secure node ID
+                if (e.ExternalIP != null)
+                    Engine?.DhtEngine.SetExternalIp (e.ExternalIP);
 
                 int count = 0;
                 foreach (var kvp in e.Peers)

@@ -37,6 +37,8 @@ namespace MonoTorrent.Logging
 {
     class NullLogger : IRootLogger
     {
+        public bool IsEnabled => false;
+
         public void Debug (string name, string message)
         {
         }

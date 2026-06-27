@@ -82,7 +82,7 @@ namespace MonoTorrent.Dht.Tasks
             // If we were given a list of nodes to load at the start, use them
             try {
                 if (initialNodes.Count > 0) {
-                    Logger.Info (string.Format ("Poplating with {0} initial nodes", initialNodes.Count));
+                    if (Logger.IsEnabled) Logger.Info (string.Format ("Poplating with {0} initial nodes", initialNodes.Count));
                     await PopulateFirstNodes (initialNodes);
                 } else {
                     try {
@@ -90,11 +90,11 @@ namespace MonoTorrent.Dht.Tasks
                         foreach (var v in bootstrapRouters)
                             engine.RoutingTable.AddIgnoredEndpoint (v.EndPoint);
 
-                        Logger.Info (string.Format ("Populating with {0} bootstrap routers", bootstrapRouters.Length));
+                        if (Logger.IsEnabled) Logger.Info (string.Format ("Populating with {0} bootstrap routers", bootstrapRouters.Length));
                         await PopulateFirstNodes (bootstrapRouters);
                     } catch (Exception ex) {
                         if (initializationComplete.TrySetResult (null))
-                            Logger.Info (string.Format ("Unexpected error initiating task: {0}", ex));
+                            if (Logger.IsEnabled) Logger.Info (string.Format ("Unexpected error initiating task: {0}", ex));
                         return;
                     }
                 }
@@ -124,7 +124,7 @@ namespace MonoTorrent.Dht.Tasks
                     foreach (var endpoint in endpoints)
                         results.Add (new Node (NodeId.Create (), endpoint));
                 } catch (Exception ex) {
-                    Logger.Error (string.Format ("Could not resolve IPs for a bootstrap router: {0}", ex));
+                    if (Logger.IsEnabled) Logger.Error (string.Format ("Could not resolve IPs for a bootstrap router: {0}", ex));
                 }
             }
 
@@ -148,7 +148,7 @@ namespace MonoTorrent.Dht.Tasks
             // Query for the first set of nodes close to our local id. Query *all* of them.
             foreach (Node node in newNodes) {
                 var transactionId = TransactionId.NextId ();
-                var request = KrpcMessageEncoder.EncodeFindNode (transactionId, engine.LocalId, engine.LocalId);
+                var request = KrpcMessageEncoder.EncodeFindNode (transactionId, engine.LocalId, engine.LocalId, engine.IsReadOnly);
                 engine.SendQueryAsync (request, node, findNodesChannel.Writer);
                 pendingFindNodes++;
             }
@@ -162,14 +162,14 @@ namespace MonoTorrent.Dht.Tasks
             while (pendingFindNodes > 0) {
                 SendQueryEventArgs args = await findNodesChannel.Reader.ReadAsync ();
                 pendingFindNodes--;
-                Logger.Info (string.Format ("{0} initial find nodes pending", pendingFindNodes));
+                if (Logger.IsEnabled) Logger.Info (string.Format ("{0} initial find nodes pending", pendingFindNodes));
                 if (!args.Response.IsEmpty) {
                     // Ping each node we get back to ensure it's alive/reachable. If it responds
                     // it'll be in the table.
                     var response = KrpcMessage.Parse (args.Response);
                     foreach (Node node in Node.FromCompactNodes (response.Response.Nodes)) {
                         var id = TransactionId.NextId ();
-                        var request = KrpcMessageEncoder.EncodePing (id, engine.LocalId);
+                        var request = KrpcMessageEncoder.EncodePing (id, engine.LocalId, engine.IsReadOnly);
                         engine.SendQueryAsync (request, node, pingsChannel.Writer);
                         pendingPings++;
                     }
@@ -180,13 +180,13 @@ namespace MonoTorrent.Dht.Tasks
             while (pendingPings > 0) {
                 await pingsChannel.Reader.ReadAsync ();
                 pendingPings--;
-                Logger.Info (string.Format ("{0} initial pings pending", pendingPings));
+                if (Logger.IsEnabled) Logger.Info (string.Format ("{0} initial pings pending", pendingPings));
             }
 
             // If the routing table doesn't have at least 4 active nodes at this point and we launched using a cached list of dht nodes,
             // retry bootstrapping using the DHT routers.
             if (initialNodes.Count > 0 && engine.RoutingTable.NeedsBootstrap && BootstrapRouters.Length > 0) {
-                Logger.Info (string.Format ("Only have {0} nodes, rebootstrapping", engine.RoutingTable.CountNodes ()));
+                if (Logger.IsEnabled) Logger.Info (string.Format ("Only have {0} nodes, rebootstrapping", engine.RoutingTable.CountNodes ()));
                 await new InitialiseTask (engine).ExecuteAsync ();
             } else {
                 // Otherwise presplit the routing table and populate each bucket.
@@ -197,7 +197,7 @@ namespace MonoTorrent.Dht.Tasks
                 foreach (var bucket in engine.RoutingTable.Buckets) {
                     prefillTasks.Add (Prefill (NodeId.RandomBetween (bucket.Min, bucket.Max)));
                 }
-                Logger.Info (string.Format ("Started pressplits"));
+                if (Logger.IsEnabled) Logger.Info ("Started pre-splits");
                 await Task.WhenAll (prefillTasks);
             }
         }
@@ -214,17 +214,17 @@ namespace MonoTorrent.Dht.Tasks
             // Query for the first set of nodes close to our local id.
             foreach (Node node in engine.RoutingTable.GetClosest (target)) {
                 var transactionId = TransactionId.NextId ();
-                var request = KrpcMessageEncoder.EncodeFindNode (transactionId, engine.LocalId, target.Span);
+                var request = KrpcMessageEncoder.EncodeFindNode (transactionId, engine.LocalId, target.Span, engine.IsReadOnly);
                 engine.SendQueryAsync (request, node, findNodesChannel.Writer);
                 pendingFindNodes++;
             }
 
-            Logger.Info (string.Format ("{1}: Sent {0} pre-split findnodes", pendingFindNodes, Convert.ToHexString (target.Span)));
+            if (Logger.IsEnabled) Logger.Info (string.Format ("{1}: Sent {0} pre-split findnodes", pendingFindNodes, Convert.ToHexString (target.Span)));
 
             while (pendingFindNodes > 0) {
                 SendQueryEventArgs args = await findNodesChannel.Reader.ReadAsync ();
                 pendingFindNodes--;
-                Logger.Info (string.Format ("{1}: pending {0} pre-split findnodes", pendingFindNodes, Convert.ToHexString (target.Span)));
+                if (Logger.IsEnabled) Logger.Info (string.Format ("{1}: pending {0} pre-split findnodes", pendingFindNodes, Convert.ToHexString (target.Span)));
 
                 if (!args.Response.IsEmpty) {
                     if (engine.RoutingTable.CountNodes () >= MinHealthyNodes)
@@ -234,7 +234,7 @@ namespace MonoTorrent.Dht.Tasks
                     foreach (Node node in Node.FromCompactNodes (response.Response.Nodes)) {
                         if (closestNodes.Add (node)) {
                             var id = TransactionId.NextId ();
-                            var request = KrpcMessageEncoder.EncodeFindNode (id, engine.LocalId, target.Span);
+                            var request = KrpcMessageEncoder.EncodeFindNode (id, engine.LocalId, target.Span, engine.IsReadOnly);
                             engine.SendQueryAsync (request, node, findNodesChannel.Writer);
                             pendingFindNodes++;
                         }

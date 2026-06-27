@@ -120,5 +120,13 @@ namespace MonoTorrent.Client
         {
             return default;
         }
+
+        public void SetExternalIp (System.Net.IPAddress externalIp)
+        {
+        }
+
+        public void SetReadOnly (bool value)
+        {
+        }
     }
 }

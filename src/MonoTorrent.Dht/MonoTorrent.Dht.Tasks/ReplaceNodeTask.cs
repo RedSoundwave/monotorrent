@@ -65,7 +65,7 @@ namespace MonoTorrent.Dht.Tasks
             } else {
                 Node oldest = bucket.Nodes[0];
                 var transactionId = TransactionId.NextId ();
-                var ping = KrpcMessageEncoder.EncodePing (transactionId, engine.LocalId);
+                var ping = KrpcMessageEncoder.EncodePing (transactionId, engine.LocalId, engine.IsReadOnly);
                 engine.SendQueryAsync (ping, oldest, channel.Writer);
 
                 SendQueryEventArgs args = await channel.Reader.ReadAsync ();

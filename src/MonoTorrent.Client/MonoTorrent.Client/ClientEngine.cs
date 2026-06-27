@@ -296,7 +296,9 @@ namespace MonoTorrent.Client
         public ClientEngine (EngineSettings settings, Factories factories)
         {
             settings = settings ?? throw new ArgumentNullException (nameof (settings));
-            Factories = factories ?? throw new ArgumentNullException (nameof (factories));
+            if (factories == null) throw new ArgumentNullException (nameof (factories));
+            // BEP #704: route peer connections through SOCKS5 proxy if configured
+            Factories = settings.SocksProxy != null ? factories.WithSocksProxy (settings.SocksProxy) : factories;
 
             // This is just a sanity check to make sure the ReusableTasks.dll assembly is
             // loadable.
@@ -342,6 +344,8 @@ namespace MonoTorrent.Client
             engine.SetBootstrapRoutersAsync (settings.DhtBootstrapRouters).AsTask ().GetAwaiter ().GetResult ();
 
             DhtEngine = new DhtEngineWrapper (engine);
+            if (settings.DhtReadOnly)
+                DhtEngine.SetReadOnly (true);
             DhtEngine.SetListenerAsync (DhtListener).AsTask ().GetAwaiter ().GetResult ();
 
             DhtEngine.PeersFound += DhtEnginePeersFound;
@@ -960,6 +964,8 @@ namespace MonoTorrent.Client
             ConnectionManager.Settings = newSettings;
 
             await DhtEngine.SetBootstrapRoutersAsync (newSettings.DhtBootstrapRouters);
+            if (newSettings.DhtReadOnly != oldSettings.DhtReadOnly)
+                DhtEngine.SetReadOnly (newSettings.DhtReadOnly);
 
             if (oldSettings.UsePartialFiles != newSettings.UsePartialFiles) {
                 foreach (var manager in Torrents)

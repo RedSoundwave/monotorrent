@@ -237,6 +237,16 @@ namespace MonoTorrent
             return dupe;
         }
 
+        /// <summary>BEP #704: returns a new Factories that routes all peer connections through a SOCKS5 proxy.</summary>
+        public Factories WithSocksProxy (IPEndPoint proxyEndPoint)
+        {
+            if (proxyEndPoint == null)
+                return this;
+            var socks5 = new Socks5Connector (proxyEndPoint);
+            return WithPeerConnectionCreator ("ipv4", uri => new SocketPeerConnection (uri, socks5))
+                   .WithPeerConnectionCreator ("ipv6", uri => new SocketPeerConnection (uri, socks5));
+        }
+
         public IStreamingPieceRequester CreateStreamingPieceRequester ()
             => StreamingPieceRequesterFunc ();
         public Factories WithStreamingPieceRequesterCreator (StreamingPieceRequesterCreator creator)

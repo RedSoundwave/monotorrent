@@ -34,7 +34,9 @@ namespace MonoTorrent
         None,
         Started,
         Stopped,
-        Completed
+        Completed,
+        /// <summary>BEP 21: sent by partial seeds that have all desired pieces but not the full torrent.</summary>
+        Paused
     }
 }
 

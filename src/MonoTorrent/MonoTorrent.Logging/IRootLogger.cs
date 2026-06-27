@@ -31,6 +31,7 @@ namespace MonoTorrent.Logging
 {
     public interface IRootLogger
     {
+        bool IsEnabled { get; }
         void Info (string name, string message);
         void Debug (string name, string message);
         void Error (string name, string message);

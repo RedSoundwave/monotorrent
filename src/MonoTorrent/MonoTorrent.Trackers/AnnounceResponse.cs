@@ -29,6 +29,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 
 namespace MonoTorrent.Trackers
 {
@@ -43,6 +44,12 @@ namespace MonoTorrent.Trackers
 
         public TimeSpan? UpdateInterval { get; }
 
+        /// <summary>
+        /// The external IP address of this client as reported by the tracker (BEP 24).
+        /// Null if the tracker did not include the <c>external ip</c> field.
+        /// </summary>
+        public IPAddress? ExternalIP { get; }
+
         public AnnounceResponse (
             TrackerState state,
             Dictionary<InfoHash, IList<PeerInfo>>? peers = null,
@@ -50,13 +57,15 @@ namespace MonoTorrent.Trackers
             TimeSpan? updateInterval = null,
             Dictionary<InfoHash, ScrapeInfo>? scrapeInfo = null,
             string warningMessage = "",
-            string failureMessage = ""
+            string failureMessage = "",
+            IPAddress? externalIP = null
             )
             : base (state, scrapeInfo ?? new Dictionary<InfoHash, ScrapeInfo> (), warningMessage, failureMessage)
         {
             Peers = peers ?? new Dictionary<InfoHash, IList<PeerInfo>> ();
-            MinUpdateInterval = minUpdateInterval ;
+            MinUpdateInterval = minUpdateInterval;
             UpdateInterval = updateInterval;
+            ExternalIP = externalIP;
         }
     }
 }

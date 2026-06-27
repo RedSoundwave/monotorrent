@@ -115,7 +115,8 @@ namespace MonoTorrent.Messages.UdpTracker
             Write (ref buffer, Downloaded);
             Write (ref buffer, Left);
             Write (ref buffer, Uploaded);
-            Write (ref buffer, (int) TorrentEvent);
+            // BEP 21: UDP has no "paused" event code — map it to None (0)
+            Write (ref buffer, TorrentEvent == TorrentEvent.Paused ? 0 : (int) TorrentEvent);
             Write (ref buffer, IP);
             Write (ref buffer, Key);
             Write (ref buffer, NumWanted);

@@ -107,6 +107,11 @@ namespace MonoTorrent.Client
                     property.SetValue (builder, ToIPAddressDictionary ((BEncodedDictionary) value));
                 } else if (property.PropertyType == typeof (List<TimeSpan>)) {
                     property.SetValue (builder, ToTimeSpanList ((BEncodedList) value));
+                } else if (property.PropertyType == typeof (List<string>)) {
+                    var list = (IList<string>) property.GetValue (builder)!;
+                    list.Clear ();
+                    foreach (BEncodedString s in (BEncodedList) value)
+                        list.Add (s.Text);
                 } else
                     throw new NotSupportedException ($"{property.Name} => type: ${property.PropertyType}");
             }
@@ -134,6 +139,7 @@ namespace MonoTorrent.Client
                     null => null,
                     Dictionary<string, IPEndPoint> value => FromIPAddressDictionary (value),
                     List<BootstrapRouter> value => FromBootstrapRouters (value),
+                    List<string> value => new BEncodedList (value.Select (v => (BEncodedString) v)),
                     _ => throw new NotSupportedException ($"{property.Name} => type: ${property.PropertyType}"),
                 };
                 // Ensure default values aren't accidentally propagated.
