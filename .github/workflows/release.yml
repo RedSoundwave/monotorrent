@@ -49,17 +49,11 @@ jobs:
       - name: Restore
         run: dotnet restore src/MonoTorrent.Client/MonoTorrent.Client.csproj
 
-      - name: Build
-        run: >
-          dotnet build src/MonoTorrent.Client/MonoTorrent.Client.csproj
-          -c Release
-          --no-restore
-
-      - name: Pack
+      - name: Build & Pack
         run: >
           dotnet pack src/MonoTorrent.Client/MonoTorrent.Client.csproj
           -c Release
-          --no-build
+          --no-restore
           -o ${{ github.workspace }}/nupkgs
 
       - name: Upload nupkgs artifact
@@ -73,7 +67,7 @@ jobs:
         run: |
           for pkg in ${{ github.workspace }}/nupkgs/*.nupkg; do
             dotnet nuget push "$pkg" \
-              --api-key ${{ secrets.NUGET_PUSH_TOKEN }} \
+              --api-key ${{ secrets.GITHUB_TOKEN }} \
               --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json \
               --skip-duplicate
           done
