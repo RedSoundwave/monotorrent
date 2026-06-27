@@ -225,6 +225,16 @@ namespace MonoTorrent.Client.Modes
             SetAmInterestedStatus (id, false);
         }
 
+        // BEP 54 — peer dropped a piece it previously advertised
+        public virtual void HandleMessage (PeerId id, Extended.DontHaveMessage message)
+        {
+            if ((uint) message.PieceIndex >= (uint) id.MutableBitField.Length)
+                return;
+            id.MutableBitField[message.PieceIndex] = false;
+            id.Peer.IsSeeder = id.BitField.AllTrue;
+            SetAmInterestedStatus (id, Manager.PieceManager.IsInteresting (id));
+        }
+
         public virtual void HandleMessage (PeerId id, HaveAllMessage message)
         {
             id.MutableBitField.SetAll (true);

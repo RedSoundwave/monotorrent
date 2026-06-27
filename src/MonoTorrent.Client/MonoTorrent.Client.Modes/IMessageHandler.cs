@@ -63,5 +63,6 @@ namespace MonoTorrent.Client.Modes
         void HandleMessage (PeerId id, Extended.HandshakeMessage message);
         void HandleMessage (PeerId id, Extended.PeerExchangeMessage message);
         void HandleMessage (PeerId id, Extended.MetadataMessage message);
+        void HandleMessage (PeerId id, Extended.DontHaveMessage message); // BEP 54
     }
 }

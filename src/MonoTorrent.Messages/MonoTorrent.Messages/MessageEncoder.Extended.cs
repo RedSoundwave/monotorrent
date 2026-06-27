@@ -19,6 +19,7 @@ namespace MonoTorrent.Messages
             public static readonly ExtensionSupport PeerExchangeSupport = new ExtensionSupport ("ut_pex", (byte) ExtendedMessageType.PeerExchange);
             public static readonly ExtensionSupport MetadataExchangeSupport = new ExtensionSupport ("ut_metadata", (byte) ExtendedMessageType.Metadata);
             public static readonly ExtensionSupport ChatSupport = new ExtensionSupport ("LT_chat", (byte) ExtendedMessageType.Chat);
+            public static readonly ExtensionSupport LtDontHaveSupport = new ExtensionSupport ("lt_donthave", (byte) ExtendedMessageType.LtDontHave);
 
             static Extended ()
             {
@@ -26,7 +27,8 @@ namespace MonoTorrent.Messages
                     HandshakeSupport,
                     PeerExchangeSupport,
                     MetadataExchangeSupport,
-                    ChatSupport
+                    ChatSupport,
+                    LtDontHaveSupport
                 });
             }
 
@@ -170,6 +172,22 @@ namespace MonoTorrent.Messages
                     extensionId: remoteSupports.MessageId (MetadataExchangeSupport),
                     payloadLength: writer.Written);
                 return writer.Written + 6;
+            }
+
+            // BEP 54 — lt_donthave: inform the peer we no longer have a piece.
+            // Payload is a 4-byte big-endian piece index.
+            public static (Memory<byte> msg, ByteBufferPool.Releaser releaser) WriteDontHave (ExtensionSupports remoteSupports, int pieceIndex)
+            {
+                var releaser = MemoryPool.Default.Rent (10, out var buffer);
+                buffer = buffer.Slice (0, WriteDontHave (buffer.Span, remoteSupports, pieceIndex));
+                return (buffer, releaser);
+            }
+
+            public static int WriteDontHave (Span<byte> dest, ExtensionSupports remoteSupports, int pieceIndex)
+            {
+                BinaryPrimitives.WriteInt32BigEndian (dest.Slice (6), pieceIndex);
+                WriteHeader (dest, remoteSupports.MessageId (LtDontHaveSupport), payloadLength: 4);
+                return 10;
             }
         }
     }

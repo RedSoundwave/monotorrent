@@ -439,5 +439,16 @@ namespace MonoTorrent.Messages
             public readonly ReadOnlySpan<byte> Added6DotF;
             public readonly ReadOnlySpan<byte> Dropped6;
         }
+
+        // BEP 54 — lt_donthave
+        public readonly ref struct DontHaveMessage
+        {
+            public DontHaveMessage (ReadOnlyMemory<byte> memory)
+            {
+                PieceIndex = BinaryPrimitives.ReadInt32BigEndian (memory.Span.Slice (6));
+            }
+
+            public readonly int PieceIndex;
+        }
     }
 }

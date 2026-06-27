@@ -515,9 +515,12 @@ namespace MonoTorrent.Client
                             case ExtendedMessageType.PeerExchange:
                                 handler.HandleMessage (peer, new Extended.PeerExchangeMessage (message));
                                 break;
+                            case ExtendedMessageType.LtDontHave:
+                                handler.HandleMessage (peer, new Extended.DontHaveMessage (message));
+                                break;
                             default:
-                                logger.ErrorFormatted ("Unsupported extended message '{0}' received, closing the connection", (int) MessageDispatcher.GetExtendedMessageType (message));
-                                throw new NotSupportedException ("Extended message not supported");
+                                logger.InfoFormatted ("Ignoring unknown extended message type '{0}'", (int) MessageDispatcher.GetExtendedMessageType (message));
+                                break;
                         }
                         break;
                     default:
