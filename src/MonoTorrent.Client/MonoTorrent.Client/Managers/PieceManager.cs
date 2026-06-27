@@ -63,7 +63,12 @@ namespace MonoTorrent.Client
         {
             Manager = manager;
             PendingHashCheckPieces = new BitField (1);
-            Requester = manager.Engine!.Factories.CreatePieceRequester ();
+            // Sequential download: disable rarest-first and randomised selection so
+            // pieces are always requested in order from the start of the torrent.
+            var settings = manager.Settings.SequentialDownload
+                ? new PieceRequesterSettings (allowPrioritisation: true, allowRandomised: false, allowRarestFirst: false)
+                : PieceRequesterSettings.Default;
+            Requester = manager.Engine!.Factories.CreatePieceRequester (settings);
         }
 
         internal bool PieceDataReceived (PeerId id, int pieceIndex, int startOffset, int requestLength, out bool pieceComplete, HashSet<IRequester> peersInvolved)

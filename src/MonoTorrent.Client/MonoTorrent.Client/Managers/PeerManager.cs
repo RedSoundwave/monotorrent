@@ -36,6 +36,12 @@ namespace MonoTorrent.Client
         internal List<PeerId> ConnectedPeers;
         internal List<Peer> ConnectingToPeers;
 
+        /// <summary>
+        /// Returns a read-only view of the peers currently connected to this torrent.
+        /// Each <see cref="PeerId"/> exposes <see cref="PeerId.Uri"/> for IP filtering.
+        /// </summary>
+        public IReadOnlyList<PeerId> ActiveConnections => ConnectedPeers;
+
         internal List<Peer> ActivePeers;
         internal List<Peer> AvailablePeers;
 

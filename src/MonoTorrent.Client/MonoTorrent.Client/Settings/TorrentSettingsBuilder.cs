@@ -98,6 +98,13 @@ namespace MonoTorrent.Client
         public bool RequirePeerIdToMatch { get; set; }
 
         /// <summary>
+        /// When true, pieces are downloaded sequentially from the beginning of each file rather than
+        /// using rarest-first selection.  Useful for play-while-downloading / streaming scenarios.
+        /// Defaults to <see langword="false"/>.
+        /// </summary>
+        public bool SequentialDownload { get; set; }
+
+        /// <summary>
         /// The number of peers which can be uploaded to concurrently for this torrent. A value of 0 means unlimited. defaults to 8.
         /// </summary>
         public int UploadSlots {
@@ -121,6 +128,7 @@ namespace MonoTorrent.Client
             MaximumDownloadRate = settings.MaximumDownloadRate;
             MaximumUploadRate = settings.MaximumUploadRate;
             RequirePeerIdToMatch = settings.RequirePeerIdToMatch;
+            SequentialDownload = settings.SequentialDownload;
             UploadSlots = settings.UploadSlots;
         }
 
@@ -135,6 +143,7 @@ namespace MonoTorrent.Client
                 maximumDownloadRate: MaximumDownloadRate,
                 maximumUploadRate: MaximumUploadRate,
                 requirePeerIdToMatch: RequirePeerIdToMatch,
+                sequentialDownload: SequentialDownload,
                 uploadSlots: UploadSlots
             );
         }

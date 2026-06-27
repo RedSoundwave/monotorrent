@@ -84,6 +84,13 @@ namespace MonoTorrent.Client
         public bool RequirePeerIdToMatch { get; }
 
         /// <summary>
+        /// When true, pieces are downloaded sequentially from the beginning of each file rather than
+        /// using rarest-first selection.  Useful for play-while-downloading / streaming scenarios.
+        /// Defaults to <see langword="false"/>.
+        /// </summary>
+        public bool SequentialDownload { get; }
+
+        /// <summary>
         /// The number of peers which can be uploaded to concurrently for this torrent. A value of 0 means unlimited. defaults to 8.
         /// </summary>
         public int UploadSlots { get; } = 8;
@@ -111,7 +118,7 @@ namespace MonoTorrent.Client
 
         }
 
-        internal TorrentSettings (bool allowDht, bool allowInitialSeeding, bool allowPeerExchange, int maximumConnections, int maximumDownloadRate, int maximumUploadRate, int uploadSlots, bool createContainingDirectory, bool requirePeerIdToMatch)
+        internal TorrentSettings (bool allowDht, bool allowInitialSeeding, bool allowPeerExchange, int maximumConnections, int maximumDownloadRate, int maximumUploadRate, int uploadSlots, bool createContainingDirectory, bool requirePeerIdToMatch, bool sequentialDownload = false)
         {
             AllowDht = allowDht;
             AllowInitialSeeding = allowInitialSeeding;
@@ -121,6 +128,7 @@ namespace MonoTorrent.Client
             MaximumDownloadRate = maximumDownloadRate;
             MaximumUploadRate = maximumUploadRate;
             RequirePeerIdToMatch = requirePeerIdToMatch;
+            SequentialDownload = sequentialDownload;
             UploadSlots = uploadSlots;
         }
 
@@ -138,6 +146,7 @@ namespace MonoTorrent.Client
                 && MaximumDownloadRate == other.MaximumDownloadRate
                 && MaximumUploadRate == other.MaximumUploadRate
                 && RequirePeerIdToMatch == other.RequirePeerIdToMatch
+                && SequentialDownload == other.SequentialDownload
                 && UploadSlots == other.UploadSlots;
         }
 

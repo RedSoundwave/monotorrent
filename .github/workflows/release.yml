@@ -1,0 +1,100 @@
+name: Build & Release NuGet
+
+on:
+  push:
+    branches: [nexusflow]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Mark as pre-release?'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  build-and-release:
+    name: Build, Pack & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore src/MonoTorrent.Client/MonoTorrent.Client.csproj
+
+      - name: Build
+        run: >
+          dotnet build src/MonoTorrent.Client/MonoTorrent.Client.csproj
+          -c Release
+          --no-restore
+
+      - name: Pack
+        run: >
+          dotnet pack src/MonoTorrent.Client/MonoTorrent.Client.csproj
+          -c Release
+          --no-build
+          -o ${{ github.workspace }}/nupkgs
+
+      - name: Upload nupkgs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs
+          path: ${{ github.workspace }}/nupkgs/*.nupkg
+          retention-days: 30
+
+      - name: Push to GitHub Packages
+        run: |
+          for pkg in ${{ github.workspace }}/nupkgs/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key ${{ secrets.NUGET_PUSH_TOKEN }} \
+              --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json \
+              --skip-duplicate
+          done
+
+      - name: Determine pre-release flag
+        id: prerel
+        run: |
+          TAG="${GITHUB_REF_NAME:-}"
+          MANUAL="${{ inputs.prerelease }}"
+          if [[ "$TAG" == *"-"* ]] || [[ "$MANUAL" == "true" ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "MonoTorrent NexusFlow ${{ github.ref_name }}"
+          prerelease: ${{ steps.prerel.outputs.is_prerelease }}
+          generate_release_notes: true
+          files: |
+            ${{ github.workspace }}/nupkgs/*.nupkg

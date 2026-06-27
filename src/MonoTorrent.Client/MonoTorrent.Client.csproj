@@ -34,7 +34,7 @@
       to ensure our GitInfo related properties have been calculated correctly. -->
   <Target Name="SetPackProperties" DependsOnTargets="SetAssemblyVersion">
     <PropertyGroup>
-      <Authors>Alan McGovern,Olivier Dufour</Authors>
+      <Authors>Alan McGovern,Olivier Dufour,NexusFlow Dev</Authors>
       <PackageDescription>
         MonoTorrent is a cross platform and open source implementation of the BitTorrent protocol. It supports many advanced features such as Encryption, DHT, Peer Exchange, Web Seeding and Magnet Links.
         Notable features include:
@@ -63,9 +63,9 @@
       </PackageDescription>
       <PackageId>MonoTorrent</PackageId>
       <PackageLicenseFile>LICENSE</PackageLicenseFile>
-      <PackageProjectUrl>https://github.com/alanmcgovern/monotorrent</PackageProjectUrl>
+      <PackageProjectUrl>https://github.com/RedSoundwave/monotorrent</PackageProjectUrl>
       <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-      <PackageVersion>$(MonoTorrentFileVersion)$(MonoTorrentReleaseSuffix)</PackageVersion>
+      <PackageVersion>3.9.0-nexusflow</PackageVersion>
       <PackageTags>bittorrent;torrent;library;tracker;dht;c#;csharp;dotnet;.NET;p2p</PackageTags>
 
       <IncludeSource>true</IncludeSource>
@@ -75,7 +75,7 @@
       <RepositoryType>git</RepositoryType>
       <RepositoryBranch>$(GitBranch)</RepositoryBranch>
       <RepositoryCommit>$(GitSha)</RepositoryCommit>
-      <RepositoryUrl>https://github.com/alanmcgovern/monotorrent</RepositoryUrl>
+      <RepositoryUrl>https://github.com/RedSoundwave/monotorrent</RepositoryUrl>
 
       <Copyright>Alan McGovern, Gregor Burger</Copyright>
     </PropertyGroup>
