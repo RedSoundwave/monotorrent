@@ -164,6 +164,9 @@ namespace MonoTorrent.Client
         public bool IsChoking { get; internal set; }
         public bool IsConnected => !Disposed;
         public bool IsInterested { get; internal set; }
+
+        /// <summary>Closes the connection to this peer and removes it from the swarm.</summary>
+        public void Disconnect () => Dispose ();
         internal int isRequestingPiecesCount;
         public int IsRequestingPiecesCount => isRequestingPiecesCount;
         public bool IsSeeder => BitField.AllTrue || Peer.IsSeeder;
