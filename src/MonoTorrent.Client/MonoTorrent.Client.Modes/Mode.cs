@@ -187,6 +187,8 @@ namespace MonoTorrent.Client.Modes
 
                 // Peer exchange is more likely to provide fresh/connectable peers than trackers or dht.
                 // Prioritise them to the top of the list.
+                Manager.HolePunch.RecordSource (newPeers, id);
+                Manager.HolePunch.RecordSource (newPeers2, id);
                 int count = Manager.AddPeers (newPeers, prioritise: true, fromTracker: false) + Manager.AddPeers (newPeers2, prioritise: true, fromTracker: false);
                 Manager.RaisePeersFound (new PeerExchangePeersAdded (Manager, count, newPeers.Count + newPeers2.Count, id));
             }
@@ -234,6 +236,9 @@ namespace MonoTorrent.Client.Modes
             id.Peer.IsSeeder = id.BitField.AllTrue;
             SetAmInterestedStatus (id, Manager.PieceManager.IsInteresting (id));
         }
+
+        public virtual void HandleMessage (PeerId id, Extended.HolePunchMessage message)
+            => Manager.HolePunch.Handle (id, message);
 
         public virtual void HandleMessage (PeerId id, HaveAllMessage message)
         {

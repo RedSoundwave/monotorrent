@@ -59,6 +59,8 @@ namespace MonoTorrent.Client
         /// </summary>
         internal int LocalPort { get; set; }
 
+        internal bool UtpUnreachable { get; set; }
+
         /// <summary>
         /// A stale peer is one which came from an old announce/DHT/peer exchange request. These
         /// peers may still be contactable, but if a new peer is provided via one of the normal

@@ -33,6 +33,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -85,9 +86,14 @@ namespace MonoTorrent.Dht
             LastSeenTimer.Restart ();
         }
 
+        internal int CompactNodeLength => Id.Span.Length + EndPoint.Address.Length + 2;
+
+        internal static int CompactNodeSize (AddressFamily family)
+            => family == AddressFamily.InterNetworkV6 ? 38 : 26;
+
         internal BEncodedString CompactEndPoint ()
         {
-            byte[] buffer = new byte[6];
+            byte[] buffer = new byte[EndPoint.Address.Length + 2];
             if (CompactEndPoint (buffer) != buffer.Length)
                 throw new InvalidOperationException ("Couldn't write the address to the provided buffer");
             return new BEncodedString (buffer);
@@ -102,16 +108,21 @@ namespace MonoTorrent.Dht
 
         internal static BEncodedString CompactEndPoint (IList<Node> peers)
         {
-            var buffer = new byte[peers.Count * 6];
+            int length = 0;
             for (int i = 0; i < peers.Count; i++)
-                peers[i].CompactEndPoint (buffer.AsSpan (i * 6, 6));
+                length += peers[i].EndPoint.Address.Length + 2;
+
+            var buffer = new byte[length];
+            int offset = 0;
+            for (int i = 0; i < peers.Count; i++)
+                offset += peers[i].CompactEndPoint (buffer.AsSpan (offset));
 
             return new BEncodedString (buffer);
         }
 
         internal BEncodedString CompactNode ()
         {
-            byte[] buffer = new byte[26];
+            byte[] buffer = new byte[CompactNodeLength];
             CompactNode (buffer);
             return new BEncodedString (buffer);
         }
@@ -124,26 +135,33 @@ namespace MonoTorrent.Dht
 
         internal static BEncodedString CompactNode (ICollection<Node> nodes)
         {
-            int count = 0;
-            byte[] buffer = new byte[nodes.Count * 26];
-            foreach (Node node in nodes) {
-                node.CompactNode (buffer.AsSpan (count * 26, 26));
-                count++;
-            }
+            int length = 0;
+            foreach (Node node in nodes)
+                length += node.CompactNodeLength;
+
+            byte[] buffer = new byte[length];
+            int offset = 0;
+            foreach (Node node in nodes)
+                offset += node.CompactNode (buffer.AsSpan (offset, node.CompactNodeLength));
 
             return new BEncodedString (buffer);
         }
 
         internal static Node? FromCompactNode (ReadOnlySpan<byte> buffer)
-        {
-            if (buffer.Length != 26)
-                throw new ArgumentException ("buffer must be exactly 26 bytes long", nameof (buffer));
+            => FromCompactNode (buffer, AddressFamily.InterNetwork);
 
-            if (IsObviouslyBad (buffer.Slice (20, 4)))
+        internal static Node? FromCompactNode (ReadOnlySpan<byte> buffer, AddressFamily family)
+        {
+            int size = CompactNodeSize (family);
+            if (buffer.Length != size)
+                throw new ArgumentException ($"buffer must be exactly {size} bytes long", nameof (buffer));
+
+            var address = buffer.Slice (20, size - 22);
+            if (family == AddressFamily.InterNetwork ? IsObviouslyBad (address) : IsObviouslyBadIPv6 (address))
                 return null;
 
-            var endpoint = MonoTorrent.CompactEndPoint.FromCompact (buffer.Slice (20, 6), System.Net.Sockets.AddressFamily.InterNetwork);
-            return new Node (new NodeId(buffer.Slice (0, 20)), endpoint);
+            var endpoint = MonoTorrent.CompactEndPoint.FromCompact (buffer.Slice (20), family);
+            return new Node (new NodeId (buffer.Slice (0, 20)), endpoint);
         }
 
         static bool IsObviouslyBad (ReadOnlySpan<byte> ipBytes)
@@ -157,11 +175,24 @@ namespace MonoTorrent.Dht
             };
         }
 
-        internal static IEnumerable<Node> FromCompactNode (IEnumerable<ReadOnlyMemory<byte>> nodes)
+        static bool IsObviouslyBadIPv6 (ReadOnlySpan<byte> ipBytes)
         {
+            if (ipBytes[0] == 0xff)
+                return true;
+            if (ipBytes[0] == 0xfe && (ipBytes[1] & 0xc0) == 0x80)
+                return true;
+            return ipBytes.Slice (0, 10).IndexOfAnyExcept ((byte) 0) < 0;
+        }
+
+        internal static IEnumerable<Node> FromCompactNode (IEnumerable<ReadOnlyMemory<byte>> nodes)
+            => FromCompactNode (nodes, AddressFamily.InterNetwork);
+
+        internal static IEnumerable<Node> FromCompactNode (IEnumerable<ReadOnlyMemory<byte>> nodes, AddressFamily family)
+        {
+            int size = CompactNodeSize (family);
             foreach (var rawNode in nodes) {
-                for (int i = 0; (i + 26) <= rawNode.Length; i += 26) {
-                    var n = FromCompactNode (rawNode.Span.Slice (i, 26));
+                for (int i = 0; (i + size) <= rawNode.Length; i += size) {
+                    var n = FromCompactNode (rawNode.Span.Slice (i, size), family);
                     if (n is not null)
                         yield return n;
                 }
@@ -175,13 +206,17 @@ namespace MonoTorrent.Dht
         }
 
         internal static IEnumerable<Node> FromCompactNodes (ReadOnlySpan<byte> nodes)
+            => FromCompactNodes (nodes, AddressFamily.InterNetwork);
+
+        internal static IEnumerable<Node> FromCompactNodes (ReadOnlySpan<byte> nodes, AddressFamily family)
         {
-            var results = new List<Node> (nodes.Length / 26);
-            while (nodes.Length >= 26) {
-                var node = FromCompactNode (nodes.Slice (0, 26));
+            int size = CompactNodeSize (family);
+            var results = new List<Node> (nodes.Length / size);
+            while (nodes.Length >= size) {
+                var node = FromCompactNode (nodes.Slice (0, size), family);
                 if (node is not null)
                     results.Add (node);
-                nodes = nodes.Slice (26);
+                nodes = nodes.Slice (size);
             }
             return results;
         }

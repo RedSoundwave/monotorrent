@@ -337,6 +337,8 @@ namespace MonoTorrent.Client
         /// </summary>
         internal InactivePeerManager InactivePeerManager { get; }
 
+        internal HolePunchManager HolePunch { get; }
+
         /// <summary>
         /// The download progress in percent (0 -> 100.0) for the files whose priority
         /// is not set to <see cref="Priority.DoNotDownload"/>. If every file is marked
@@ -503,6 +505,7 @@ namespace MonoTorrent.Client
             finishedPieces = new Queue<int> ();
             Monitor = new ConnectionMonitor ();
             InactivePeerManager = new InactivePeerManager (this, engine.ConnectionManager);
+            HolePunch = new HolePunchManager (this);
             Peers = new PeerManager ();
             PieceManager = new PieceManager (this);
 

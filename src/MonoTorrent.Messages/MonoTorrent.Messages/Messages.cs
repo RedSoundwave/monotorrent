@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers.Binary;
 using System.Linq;
+using System.Net;
 using System.Text;
 
 using MonoTorrent.BEncoding;
@@ -449,6 +450,57 @@ namespace MonoTorrent.Messages
             }
 
             public readonly int PieceIndex;
+        }
+
+        public enum HolePunchMessageType : byte
+        {
+            Rendezvous = 0,
+            Connect = 1,
+            Error = 2,
+        }
+
+        public enum HolePunchError : uint
+        {
+            None = 0,
+            NoSuchPeer = 1,
+            NotConnected = 2,
+            NoSupport = 3,
+            NoSelf = 4,
+        }
+
+        public readonly ref struct HolePunchMessage
+        {
+            public const int MaxPayloadLength = 24;
+
+            public HolePunchMessage (ReadOnlyMemory<byte> memory)
+            {
+                MessageType = default;
+                EndPoint = null;
+                Error = default;
+
+                var payload = memory.Span.Slice (6);
+                if (payload.Length < 2)
+                    return;
+
+                var addressLength = payload[1] switch {
+                    0 => 4,
+                    1 => 16,
+                    _ => 0
+                };
+                if (addressLength == 0 || payload.Length < 8 + addressLength)
+                    return;
+
+                MessageType = (HolePunchMessageType) payload[0];
+                var address = new IPAddress (payload.Slice (2, addressLength));
+                EndPoint = new IPEndPoint (address, BinaryPrimitives.ReadUInt16BigEndian (payload.Slice (2 + addressLength)));
+                Error = (HolePunchError) BinaryPrimitives.ReadUInt32BigEndian (payload.Slice (4 + addressLength));
+            }
+
+            public bool IsValid => EndPoint != null;
+
+            public readonly HolePunchMessageType MessageType;
+            public readonly IPEndPoint? EndPoint;
+            public readonly HolePunchError Error;
         }
     }
 }

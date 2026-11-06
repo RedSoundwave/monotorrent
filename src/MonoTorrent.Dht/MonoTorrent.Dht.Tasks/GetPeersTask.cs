@@ -30,6 +30,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -101,8 +102,8 @@ namespace MonoTorrent.Dht.Tasks
                 }
                 // The response contains nodes which should be closer to our target. If they are closer than nodes
                 // we've already checked, then let's query them!
-                if (!response.Response.Nodes.IsEmpty && FoundPeers.Count < MaxPeers) {
-                    foreach (Node node in Node.FromCompactNodes (response.Response.Nodes))
+                if (FoundPeers.Count < MaxPeers) {
+                    foreach (Node node in Engine.NodesFrom (response.Response))
                         if (closestNodes.Add (node)) {
                             var transactionId = TransactionId.NextId ();
                             var getPeers = KrpcMessageEncoder.EncodeGetPeers (transactionId, Engine.LocalId, InfoHash.Span, Engine.IsReadOnly);
@@ -138,7 +139,12 @@ namespace MonoTorrent.Dht.Tasks
                 if (reader.Token != BEncodeToken.String)
                     throw new BEncodingException ("Expected compact peer string in values list.");
 
-                var parsed = PeerInfo.FromCompact (reader.Span, Engine.AddressFamily);
+                var family = reader.Span.Length switch {
+                    6 => AddressFamily.InterNetwork,
+                    18 => AddressFamily.InterNetworkV6,
+                    _ => Engine.AddressFamily
+                };
+                var parsed = PeerInfo.FromCompact (reader.Span, family);
                 peers.AddRange (parsed);
             }
 

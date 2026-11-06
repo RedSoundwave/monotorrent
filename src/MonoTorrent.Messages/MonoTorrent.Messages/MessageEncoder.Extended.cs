@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Buffers.Binary;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 
 using MonoTorrent.BEncoding;
 using MonoTorrent.Messages.Peer.Libtorrent;
@@ -20,6 +22,7 @@ namespace MonoTorrent.Messages
             public static readonly ExtensionSupport MetadataExchangeSupport = new ExtensionSupport ("ut_metadata", (byte) ExtendedMessageType.Metadata);
             public static readonly ExtensionSupport ChatSupport = new ExtensionSupport ("LT_chat", (byte) ExtendedMessageType.Chat);
             public static readonly ExtensionSupport LtDontHaveSupport = new ExtensionSupport ("lt_donthave", (byte) ExtendedMessageType.LtDontHave);
+            public static readonly ExtensionSupport HolePunchSupport = new ExtensionSupport ("ut_holepunch", (byte) ExtendedMessageType.HolePunch);
 
             static Extended ()
             {
@@ -28,7 +31,8 @@ namespace MonoTorrent.Messages
                     PeerExchangeSupport,
                     MetadataExchangeSupport,
                     ChatSupport,
-                    LtDontHaveSupport
+                    LtDontHaveSupport,
+                    HolePunchSupport
                 });
             }
 
@@ -188,6 +192,31 @@ namespace MonoTorrent.Messages
                 BinaryPrimitives.WriteInt32BigEndian (dest.Slice (6), pieceIndex);
                 WriteHeader (dest, remoteSupports.MessageId (LtDontHaveSupport), payloadLength: 4);
                 return 10;
+            }
+
+            public static (Memory<byte> msg, ByteBufferPool.Releaser releaser) WriteHolePunch (ExtensionSupports remoteSupports, Messages.Extended.HolePunchMessageType type, IPEndPoint endPoint, Messages.Extended.HolePunchError error)
+            {
+                var releaser = MemoryPool.Default.Rent (6 + Messages.Extended.HolePunchMessage.MaxPayloadLength, out var buffer);
+                buffer = buffer.Slice (0, WriteHolePunch (buffer.Span, remoteSupports, type, endPoint, error));
+                return (buffer, releaser);
+            }
+
+            public static int WriteHolePunch (Span<byte> dest, ExtensionSupports remoteSupports, Messages.Extended.HolePunchMessageType type, IPEndPoint endPoint, Messages.Extended.HolePunchError error)
+            {
+                var payload = dest.Slice (6);
+                var isIPv6 = endPoint.AddressFamily == AddressFamily.InterNetworkV6;
+                var addressLength = isIPv6 ? 16 : 4;
+
+                payload[0] = (byte) type;
+                payload[1] = isIPv6 ? (byte) 1 : (byte) 0;
+                if (!endPoint.Address.TryWriteBytes (payload.Slice (2, addressLength), out _))
+                    throw new ArgumentException ("The hole punch endpoint address could not be written", nameof (endPoint));
+                BinaryPrimitives.WriteUInt16BigEndian (payload.Slice (2 + addressLength), (ushort) endPoint.Port);
+                BinaryPrimitives.WriteUInt32BigEndian (payload.Slice (4 + addressLength), (uint) error);
+
+                var payloadLength = 8 + addressLength;
+                WriteHeader (dest, remoteSupports.MessageId (HolePunchSupport), payloadLength);
+                return 6 + payloadLength;
             }
         }
     }

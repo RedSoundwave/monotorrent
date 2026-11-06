@@ -92,6 +92,16 @@ namespace MonoTorrent.Client
             return ReusableTask.CompletedTask;
         }
 
+        public System.Net.IPAddress ExternalIp { get; private set; }
+
+        public bool ReadOnly { get; private set; }
+
+        public void SetExternalIp (System.Net.IPAddress externalIp)
+            => ExternalIp = externalIp;
+
+        public void SetReadOnly (bool value)
+            => ReadOnly = value;
+
         public ReusableTask StartAsync ()
             => StartAsync (null);
 

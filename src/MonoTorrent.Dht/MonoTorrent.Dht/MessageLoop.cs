@@ -32,6 +32,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -163,6 +164,9 @@ namespace MonoTorrent.Dht
 
             // Don't handle new messages if we have already stopped the dht engine.
             if (Listener.Status == ListenerStatus.NotListening)
+                return;
+
+            if (endpoint.Family != Engine.AddressFamily)
                 return;
 
             Monitor.ReceiveMonitor.AddDelta (buffer.Length);
@@ -434,8 +438,24 @@ namespace MonoTorrent.Dht
                 ? targetNode.CompactNode ()
                 : Node.CompactNode (Engine.RoutingTable.GetClosest (nodeId));
 
-            var response = KrpcMessageEncoder.EncodeFindNodeResponse (rawResponse.TransactionId, Engine.LocalId, nodes.Span);
+            SplitByWant (rawResponse.Request.Want, nodes.AsMemory (), out var nodes4, out var nodes6);
+            var response = KrpcMessageEncoder.EncodeFindNodeResponse (rawResponse.TransactionId, Engine.LocalId, nodes4.Span, nodes6.Span);
             Engine.MessageLoop.EnqueueSend (response, node, node.EndPoint, null);
+        }
+
+        void SplitByWant (KrpcWant want, ReadOnlyMemory<byte> nodes, out ReadOnlyMemory<byte> nodes4, out ReadOnlyMemory<byte> nodes6)
+        {
+            nodes4 = default;
+            nodes6 = default;
+
+            var ownFamily = Engine.AddressFamily == AddressFamily.InterNetwork ? KrpcWant.Nodes : KrpcWant.Nodes6;
+            if (want != KrpcWant.None && (want & ownFamily) == 0)
+                return;
+
+            if (ownFamily == KrpcWant.Nodes)
+                nodes4 = nodes;
+            else
+                nodes6 = nodes;
         }
 
         void HandleGetPeers (Node node, ref KrpcMessage rawResponse)
@@ -450,7 +470,9 @@ namespace MonoTorrent.Dht
                     list.Add (n.CompactEndPoint ());
                 response = KrpcMessageEncoder.EncodeGetPeersResponseValues (rawResponse.TransactionId, Engine.LocalId, token, list.Encode ());
             } else {
-                response = KrpcMessageEncoder.EncodeGetPeersResponseNodes (rawResponse.TransactionId, Engine.LocalId, token, Node.CompactNode (Engine.RoutingTable.GetClosest (infoHash)).Span);
+                var closest = Node.CompactNode (Engine.RoutingTable.GetClosest (infoHash));
+                SplitByWant (rawResponse.Request.Want, closest.AsMemory (), out var nodes4, out var nodes6);
+                response = KrpcMessageEncoder.EncodeGetPeersResponseNodes (rawResponse.TransactionId, Engine.LocalId, token, nodes4.Span, nodes6.Span);
             }
 
             Engine.MessageLoop.EnqueueSend (response, node, node.EndPoint, null);

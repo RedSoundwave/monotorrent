@@ -76,7 +76,11 @@ namespace MonoTorrent.Dht.Messages
         public static ReadOnlySpan<byte> Port => "port"u8;
         public static ReadOnlySpan<byte> ImpliedPort => "implied_port"u8;
         public static ReadOnlySpan<byte> Nodes => "nodes"u8;
+        public static ReadOnlySpan<byte> Nodes6 => "nodes6"u8;
         public static ReadOnlySpan<byte> Values => "values"u8;
+        public static ReadOnlySpan<byte> Want => "want"u8;
+        public static ReadOnlySpan<byte> WantNodes4 => "n4"u8;
+        public static ReadOnlySpan<byte> WantNodes6 => "n6"u8;
         /// <summary>BEP 43: read-only flag sent by nodes that do not participate fully in routing.</summary>
         public static ReadOnlySpan<byte> ReadOnly => "ro"u8;
     }
@@ -98,6 +102,14 @@ namespace MonoTorrent.Dht.Messages
         AnnouncePeer
     }
 
+    [Flags]
+    public enum KrpcWant
+    {
+        None = 0,
+        Nodes = 1,
+        Nodes6 = 2
+    }
+
     public readonly struct KrpcRequestExtensions
     {
         readonly ReadOnlyMemory<byte> target;
@@ -110,43 +122,51 @@ namespace MonoTorrent.Dht.Messages
 
         public readonly int Port;
         public readonly bool ImpliedPort;
+        public readonly KrpcWant Want;
 
         public KrpcRequestExtensions (
             ReadOnlyMemory<byte> target,
             ReadOnlyMemory<byte> infoHash,
             ReadOnlyMemory<byte> token,
             int port,
-            bool impliedPort)
+            bool impliedPort,
+            KrpcWant want = KrpcWant.None)
         {
             this.target = target;
             this.infoHash = infoHash;
             this.token = token;
             Port = port;
             ImpliedPort = impliedPort;
+            Want = want;
         }
     }
 
     public readonly struct KrpcResponseExtensions
     {
         readonly ReadOnlyMemory<byte> nodes;
+        readonly ReadOnlyMemory<byte> nodes6;
         readonly ReadOnlyMemory<byte> values;
         readonly ReadOnlyMemory<byte> token;
 
         public readonly ReadOnlySpan<byte> Nodes => nodes.Span;
+        public readonly ReadOnlySpan<byte> Nodes6 => nodes6.Span;
         public readonly ReadOnlySpan<byte> Values => values.Span;
         public readonly ReadOnlySpan<byte> Token => token.Span;
 
         public KrpcResponseExtensions (
             ReadOnlyMemory<byte> nodes,
             ReadOnlyMemory<byte> values,
-            ReadOnlyMemory<byte> token)
+            ReadOnlyMemory<byte> token,
+            ReadOnlyMemory<byte> nodes6 = default)
         {
             this.nodes = nodes;
+            this.nodes6 = nodes6;
             this.values = values;
             this.token = token;
         }
 
         public bool HasNodes => !nodes.IsEmpty;
+        public bool HasNodes6 => !nodes6.IsEmpty;
         public bool HasValues => !values.IsEmpty;
     }
 
@@ -201,11 +221,13 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlyMemory<byte> token = default;
 
             ReadOnlyMemory<byte> nodes = default;
+            ReadOnlyMemory<byte> nodes6 = default;
             ReadOnlyMemory<byte> values = default;
-            
+
             int port = 0;
             bool impliedPort = false;
             bool isReadOnly = false;
+            KrpcWant want = KrpcWant.None;
 
             while (reader.TryReadKey (out var key)) {
                 if (key.SequenceEqual (Krpc.TransactionIdKey)) {
@@ -236,7 +258,10 @@ namespace MonoTorrent.Dht.Messages
                         } else if (akey.SequenceEqual (Krpc.ImpliedPort)) {
                             reader.CaptureInteger (buffer);
                             impliedPort = reader.Integer != 0;
-                        } else
+                        } else if (akey.SequenceEqual (Krpc.Want))
+                            want = ParseWant (reader.CaptureAny (buffer).Span);
+
+                        else
                             reader.SkipValue ();
                     }
                 } else if (key.SequenceEqual (Krpc.ReturnValuesKey)) {
@@ -248,6 +273,9 @@ namespace MonoTorrent.Dht.Messages
 
                         else if (rkey.SequenceEqual (Krpc.Nodes))
                             nodes = reader.CaptureString (buffer);
+
+                        else if (rkey.SequenceEqual (Krpc.Nodes6))
+                            nodes6 = reader.CaptureString (buffer);
 
                         else if (rkey.SequenceEqual (Krpc.Values))
                             values = reader.CaptureAny (buffer);
@@ -296,12 +324,14 @@ namespace MonoTorrent.Dht.Messages
                 infoHash,
                 token,
                 port,
-                impliedPort);
+                impliedPort,
+                want);
 
             var response = new KrpcResponseExtensions (
                 nodes,
                 values,
-                token);
+                token,
+                nodes6);
 
             return new KrpcMessage (
                 messageType,
@@ -311,6 +341,26 @@ namespace MonoTorrent.Dht.Messages
                 request,
                 response,
                 isReadOnly);
+        }
+
+        static KrpcWant ParseWant (ReadOnlySpan<byte> raw)
+        {
+            var want = KrpcWant.None;
+            var reader = new BEncodeReader (raw);
+            if (!reader.Read () || reader.Token != BEncodeToken.ListBegin)
+                return want;
+
+            while (reader.Read ()) {
+                if (reader.Token == BEncodeToken.String) {
+                    if (reader.Span.SequenceEqual (Krpc.WantNodes4))
+                        want |= KrpcWant.Nodes;
+                    else if (reader.Span.SequenceEqual (Krpc.WantNodes6))
+                        want |= KrpcWant.Nodes6;
+                } else if (reader.Token != BEncodeToken.Integer) {
+                    break;
+                }
+            }
+            return want;
         }
     }
 
@@ -328,7 +378,9 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> token = default,
             ReadOnlySpan<byte> nodes = default,
             ReadOnlySpan<byte> values = default,
-            bool readOnly = false)
+            bool readOnly = false,
+            ReadOnlySpan<byte> nodes6 = default,
+            KrpcWant want = KrpcWant.None)
         {
             return BaseSize
                  + transactionId.Length
@@ -338,8 +390,36 @@ namespace MonoTorrent.Dht.Messages
                  + infoHash.Length
                  + token.Length
                  + nodes.Length
+                 + (nodes6.IsEmpty ? 0 : nodes6.Length + 16)
                  + values.Length
-                 + (readOnly ? 8 : 0); // BEP 43: "2:ro" + "i1e" = 7 bytes
+                 + (readOnly ? 8 : 0) // BEP 43: "2:ro" + "i1e" = 7 bytes
+                 + (want == KrpcWant.None ? 0 : 16);
+        }
+
+        static void WriteWant (ref BEncodeWriter w, KrpcWant want)
+        {
+            if (want == KrpcWant.None)
+                return;
+
+            w.WriteString (Krpc.Want);
+            w.BeginList ();
+            if ((want & KrpcWant.Nodes) != 0)
+                w.WriteString (Krpc.WantNodes4);
+            if ((want & KrpcWant.Nodes6) != 0)
+                w.WriteString (Krpc.WantNodes6);
+            w.End ();
+        }
+
+        static void WriteNodes (ref BEncodeWriter w, ReadOnlySpan<byte> nodes, ReadOnlySpan<byte> nodes6)
+        {
+            if (!nodes.IsEmpty || nodes6.IsEmpty) {
+                w.WriteString (Krpc.Nodes);
+                w.WriteString (nodes);
+            }
+            if (!nodes6.IsEmpty) {
+                w.WriteString (Krpc.Nodes6);
+                w.WriteString (nodes6);
+            }
         }
 
         //
@@ -405,7 +485,8 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
             ReadOnlySpan<byte> target,
-            bool readOnly = false)
+            bool readOnly = false,
+            KrpcWant want = KrpcWant.None)
         {
             var w = new BEncodeWriter (dest);
 
@@ -419,6 +500,8 @@ namespace MonoTorrent.Dht.Messages
 
             w.WriteString (Krpc.Target);
             w.WriteString (target);
+
+            WriteWant (ref w, want);
 
             w.End ();
 
@@ -445,15 +528,17 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
             ReadOnlySpan<byte> target,
-            bool readOnly = false)
+            bool readOnly = false,
+            KrpcWant want = KrpcWant.None)
         {
             Memory<byte> buffer = new byte[
                 Estimate (transactionId, nodeId,
                          Krpc.Queries.FindNode,
                          target: target,
-                         readOnly: readOnly)];
+                         readOnly: readOnly,
+                         want: want)];
 
-            return buffer.Slice (0, EncodeFindNode (buffer.Span, transactionId, nodeId, target, readOnly));
+            return buffer.Slice (0, EncodeFindNode (buffer.Span, transactionId, nodeId, target, readOnly, want));
         }
 
         //
@@ -465,7 +550,8 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
             ReadOnlySpan<byte> infoHash,
-            bool readOnly = false)
+            bool readOnly = false,
+            KrpcWant want = KrpcWant.None)
         {
             var w = new BEncodeWriter (dest);
 
@@ -479,6 +565,8 @@ namespace MonoTorrent.Dht.Messages
 
             w.WriteString (Krpc.InfoHash);
             w.WriteString (infoHash);
+
+            WriteWant (ref w, want);
 
             w.End ();
 
@@ -505,15 +593,17 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
             ReadOnlySpan<byte> infoHash,
-            bool readOnly = false)
+            bool readOnly = false,
+            KrpcWant want = KrpcWant.None)
         {
             Memory<byte> buffer = new byte[
                 Estimate (transactionId, nodeId,
                          Krpc.Queries.GetPeers,
                          infoHash: infoHash,
-                         readOnly: readOnly)];
+                         readOnly: readOnly,
+                         want: want)];
 
-            return buffer.Slice (0, EncodeGetPeers (buffer.Span, transactionId, nodeId, infoHash, readOnly));
+            return buffer.Slice (0, EncodeGetPeers (buffer.Span, transactionId, nodeId, infoHash, readOnly, want));
         }
 
         //
@@ -654,7 +744,8 @@ namespace MonoTorrent.Dht.Messages
             Span<byte> dest,
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
-            ReadOnlySpan<byte> nodes)
+            ReadOnlySpan<byte> nodes,
+            ReadOnlySpan<byte> nodes6 = default)
         {
             var w = new BEncodeWriter (dest);
 
@@ -666,8 +757,7 @@ namespace MonoTorrent.Dht.Messages
             w.WriteString (Krpc.NodeId);
             w.WriteString (nodeId);
 
-            w.WriteString (Krpc.Nodes);
-            w.WriteString (nodes);
+            WriteNodes (ref w, nodes, nodes6);
 
             w.End ();
 
@@ -685,12 +775,13 @@ namespace MonoTorrent.Dht.Messages
         public static ReadOnlyMemory<byte> EncodeFindNodeResponse (
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
-            ReadOnlySpan<byte> nodes)
+            ReadOnlySpan<byte> nodes,
+            ReadOnlySpan<byte> nodes6 = default)
         {
             Memory<byte> buffer = new byte[
-                Estimate (transactionId, nodeId, nodes: nodes)];
+                Estimate (transactionId, nodeId, nodes: nodes, nodes6: nodes6)];
 
-            return buffer.Slice (0, EncodeFindNodeResponse (buffer.Span, transactionId, nodeId, nodes));
+            return buffer.Slice (0, EncodeFindNodeResponse (buffer.Span, transactionId, nodeId, nodes, nodes6));
         }
 
         //
@@ -702,7 +793,8 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
             ReadOnlySpan<byte> token,
-            ReadOnlySpan<byte> nodes)
+            ReadOnlySpan<byte> nodes,
+            ReadOnlySpan<byte> nodes6 = default)
         {
             var w = new BEncodeWriter (dest);
 
@@ -714,8 +806,7 @@ namespace MonoTorrent.Dht.Messages
             w.WriteString (Krpc.NodeId);
             w.WriteString (nodeId);
 
-            w.WriteString (Krpc.Nodes);
-            w.WriteString (nodes);
+            WriteNodes (ref w, nodes, nodes6);
 
             w.WriteString (Krpc.Token);
             w.WriteString (token);
@@ -737,19 +828,22 @@ namespace MonoTorrent.Dht.Messages
             ReadOnlySpan<byte> transactionId,
             ReadOnlySpan<byte> nodeId,
             ReadOnlySpan<byte> token,
-            ReadOnlySpan<byte> nodes)
+            ReadOnlySpan<byte> nodes,
+            ReadOnlySpan<byte> nodes6 = default)
         {
             Memory<byte> buffer = new byte[
                 Estimate (transactionId, nodeId,
                          token: token,
-                         nodes: nodes)];
+                         nodes: nodes,
+                         nodes6: nodes6)];
 
             return buffer.Slice (0, EncodeGetPeersResponseNodes (
                 buffer.Span,
                 transactionId,
                 nodeId,
                 token,
-                nodes));
+                nodes,
+                nodes6));
         }
 
         //

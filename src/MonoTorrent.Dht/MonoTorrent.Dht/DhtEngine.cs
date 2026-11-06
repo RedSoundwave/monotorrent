@@ -77,6 +77,13 @@ namespace MonoTorrent.Dht
             new BootstrapRouter ("dht.libtorrent.org", 25401)
         });
 
+        public static readonly ImmutableHashSet<BootstrapRouter> DefaultBootstrapRoutersV6 = ImmutableHashSet.Create (new[] {
+            new BootstrapRouter ("dht.transmissionbt.com", 6881),
+            new BootstrapRouter ("router.bittorrent.com", 6881),
+            new BootstrapRouter ("router.utorrent.com", 6881),
+            new BootstrapRouter ("dht.libtorrent.org", 25401)
+        });
+
         static readonly TimeSpan DefaultAnnounceInternal = TimeSpan.FromMinutes (10);
         static readonly TimeSpan DefaultMinimumAnnounceInterval = TimeSpan.FromMinutes (3);
 
@@ -89,12 +96,11 @@ namespace MonoTorrent.Dht
 
         internal static MainLoop MainLoop { get; } = new MainLoop ("DhtLoop");
 
-        // IPV6 - create an IPV4 and an IPV6 dht engine
-        public AddressFamily AddressFamily { get; private set; } = AddressFamily.InterNetwork;
+        public AddressFamily AddressFamily { get; }
 
         public TimeSpan AnnounceInterval => DefaultAnnounceInternal;
 
-        public ImmutableHashSet<BootstrapRouter> BootstrapRouters { get; private set; } = DefaultBootstrapRouters;
+        public ImmutableHashSet<BootstrapRouter> BootstrapRouters { get; private set; }
 
         public bool Disposed { get; private set; }
 
@@ -108,7 +114,7 @@ namespace MonoTorrent.Dht
         public DhtState State { get; private set; }
 
         internal TimeSpan BucketRefreshTimeout { get; set; }
-        internal ReadOnlySpan<byte> LocalId => RoutingTable.LocalNodeId.Span;
+        internal ReadOnlySpan<byte> LocalId => RoutingTable.LocalId;
         internal MessageLoop MessageLoop { get; }
         public int NodeCount => RoutingTable.CountNodes ();
         IEnumerable<Node> PendingNodes { get; set; }
@@ -117,7 +123,18 @@ namespace MonoTorrent.Dht
         internal Dictionary<NodeId, List<Node>> Torrents { get; }
 
         public DhtEngine ()
+            : this (AddressFamily.InterNetwork)
         {
+
+        }
+
+        public DhtEngine (AddressFamily addressFamily)
+        {
+            if (addressFamily != AddressFamily.InterNetwork && addressFamily != AddressFamily.InterNetworkV6)
+                throw new ArgumentException ("AddressFamily should be InterNetwork or InterNetworkV6", nameof (addressFamily));
+
+            AddressFamily = addressFamily;
+            BootstrapRouters = addressFamily == AddressFamily.InterNetwork ? DefaultBootstrapRouters : DefaultBootstrapRoutersV6;
             var monitor = new TransferMonitor ();
             BucketRefreshTimeout = TimeSpan.FromMinutes (15);
             MessageLoop = new MessageLoop (this, monitor);
@@ -138,13 +155,13 @@ namespace MonoTorrent.Dht
         public async ReusableTask AddAsync (IEnumerable<ReadOnlyMemory<byte>> nodes)
         {
             if (State == DhtState.NotReady) {
-                PendingNodes = Node.FromCompactNode (nodes);
+                PendingNodes = Node.FromCompactNode (nodes, AddressFamily);
             } else {
                 // Maybe we should pipeline all our tasks to ensure we don't flood the DHT engine.
                 // I don't think it's *bad* that we can run several initialise tasks simultaenously
                 // but it might be better to run them sequentially instead. We should also
                 // run GetPeers and Announce tasks sequentially.
-                foreach (var node in Node.FromCompactNode (nodes)) {
+                foreach (var node in Node.FromCompactNode (nodes, AddressFamily)) {
                     try {
                         Add (node);
                     } catch {
@@ -160,7 +177,7 @@ namespace MonoTorrent.Dht
         /// <summary>BEP 42: regenerate our local node ID to be compliant with the given external IP address.</summary>
         public void SetExternalIp (IPAddress externalIp)
         {
-            if (externalIp == null || State != DhtState.NotReady)
+            if (externalIp == null || externalIp.AddressFamily != AddressFamily || State != DhtState.NotReady)
                 return;
             var newId = Bep42.CreateNodeId (externalIp);
             var newTable = new RoutingTable (newId);
@@ -172,6 +189,9 @@ namespace MonoTorrent.Dht
 
         internal void Add (Node node)
         {
+            if (node.EndPoint.Family != AddressFamily)
+                return;
+
             var id = TransactionId.NextId ();
             var query = KrpcMessageEncoder.EncodePing (id, RoutingTable.LocalNodeId.Span, IsReadOnly);
             SendQueryAsync (query, node, null);
@@ -240,6 +260,11 @@ namespace MonoTorrent.Dht
                 RaiseStateChanged (DhtState.Ready);
         }
 
+        internal IEnumerable<Node> NodesFrom (in KrpcResponseExtensions response)
+            => AddressFamily == AddressFamily.InterNetwork
+                ? Node.FromCompactNodes (response.Nodes, AddressFamily.InterNetwork)
+                : Node.FromCompactNodes (response.Nodes6, AddressFamily.InterNetworkV6);
+
         internal void RaisePeersFound (NodeId infoHash, IList<PeerInfo> peers)
         {
             PeersFound?.Invoke (this, new PeersFoundEventArgs (new InfoHash (infoHash.Span), peers));
@@ -274,7 +299,7 @@ namespace MonoTorrent.Dht
         {
             await MainLoop;
 
-            Memory<byte> buffer = new byte[RoutingTable.CountNodes () * 26];
+            Memory<byte> buffer = new byte[RoutingTable.CountNodes () * Node.CompactNodeSize (AddressFamily)];
 
             var tmp = buffer;
             foreach (Bucket b in RoutingTable.Buckets) {
@@ -304,7 +329,7 @@ namespace MonoTorrent.Dht
             => StartAsync (ReadOnlyMemory<byte>.Empty);
 
         public ReusableTask StartAsync (ReadOnlyMemory<byte> initialNodes)
-            => StartAsync (Node.FromCompactNodes (initialNodes.Span).Concat (PendingNodes));
+            => StartAsync (Node.FromCompactNodes (initialNodes.Span, AddressFamily).Concat (PendingNodes));
 
         async ReusableTask StartAsync (IEnumerable<Node> nodes)
         {

@@ -1,4 +1,4 @@
-﻿//
+//
 // Factories.cs
 //
 // Authors:
@@ -40,6 +40,7 @@ using MonoTorrent.Connections;
 using MonoTorrent.Connections.Dht;
 using MonoTorrent.Connections.Peer;
 using MonoTorrent.Connections.Tracker;
+using MonoTorrent.Connections.Utp;
 using MonoTorrent.Dht;
 using MonoTorrent.PiecePicking;
 using MonoTorrent.PieceWriter;
@@ -52,7 +53,9 @@ namespace MonoTorrent
     {
         public delegate IBlockCache BlockCacheCreator (IPieceWriter writer, long capacity, CachePolicy policy, MemoryPool buffer);
         public delegate IDhtEngine DhtCreator ();
+        public delegate IDhtEngine DhtFamilyCreator (AddressFamily addressFamily);
         public delegate IDhtListener DhtListenerCreator (IPEndPoint endpoint);
+        public delegate IUtpSocket? UtpSocketCreator (IPEndPoint endpoint);
         public delegate HttpClient HttpClientCreator (AddressFamily family);
         public delegate ILocalPeerDiscovery LocalPeerDiscoveryCreator ();
         public delegate IPeerConnection PeerConnectionCreator (Uri uri);
@@ -70,8 +73,9 @@ namespace MonoTorrent
         public static Factories Default { get; } = new Factories ();
 
         BlockCacheCreator BlockCacheFunc { get; set; }
-        DhtCreator DhtFunc { get; set; }
+        DhtFamilyCreator DhtFunc { get; set; }
         DhtListenerCreator DhtListenerFunc { get; set; }
+        UtpSocketCreator UtpSocketFunc { get; set; }
         LocalPeerDiscoveryCreator LocalPeerDiscoveryFunc { get; set; }
         HttpClientCreator HttpClientFunc { get; set; }
         ReadOnlyDictionary<string, PeerConnectionCreator> PeerConnectionFuncs { get; set; }
@@ -87,8 +91,9 @@ namespace MonoTorrent
         public Factories ()
         {
             BlockCacheFunc = (writer, capacity, policy, buffer) => new MemoryCache (buffer, capacity, policy, writer);
-            DhtFunc = () => new DhtEngine ();
+            DhtFunc = addressFamily => new DhtEngine (addressFamily);
             DhtListenerFunc = endpoint => new DhtListener (endpoint);
+            UtpSocketFunc = endpoint => new SharedUdpSocket (endpoint);
 
             HttpClientFunc = HttpRequestFactory.CreateHttpClient;
 
@@ -127,11 +132,28 @@ namespace MonoTorrent
         }
 
         public IDhtEngine CreateDht ()
-            => DhtFunc ();
+            => CreateDht (AddressFamily.InterNetwork);
+        public IDhtEngine CreateDht (AddressFamily addressFamily)
+            => DhtFunc (addressFamily);
         public Factories WithDhtCreator (DhtCreator creator)
         {
             var dupe = MemberwiseClone ();
+            dupe.DhtFunc = creator is null ? Default.DhtFunc : addressFamily => creator ();
+            return dupe;
+        }
+        public Factories WithDhtCreator (DhtFamilyCreator creator)
+        {
+            var dupe = MemberwiseClone ();
             dupe.DhtFunc = creator ?? Default.DhtFunc;
+            return dupe;
+        }
+
+        public IUtpSocket? CreateUtpSocket (IPEndPoint endPoint)
+            => UtpSocketFunc (endPoint);
+        public Factories WithUtpSocketCreator (UtpSocketCreator creator)
+        {
+            var dupe = MemberwiseClone ();
+            dupe.UtpSocketFunc = creator ?? Default.UtpSocketFunc;
             return dupe;
         }
 
@@ -238,11 +260,11 @@ namespace MonoTorrent
         }
 
         /// <summary>BEP #704: returns a new Factories that routes all peer connections through a SOCKS5 proxy.</summary>
-        public Factories WithSocksProxy (IPEndPoint proxyEndPoint)
+        public Factories WithSocksProxy (IPEndPoint proxyEndPoint, NetworkCredential? credentials = null)
         {
             if (proxyEndPoint == null)
                 return this;
-            var socks5 = new Socks5Connector (proxyEndPoint);
+            var socks5 = new Socks5Connector (proxyEndPoint, credentials);
             return WithPeerConnectionCreator ("ipv4", uri => new SocketPeerConnection (uri, socks5))
                    .WithPeerConnectionCreator ("ipv6", uri => new SocketPeerConnection (uri, socks5));
         }

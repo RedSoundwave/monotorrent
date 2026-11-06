@@ -18,7 +18,10 @@ A maintained fork of [MonoTorrent](https://github.com/alanmcgovern/monotorrent) 
 | DHT read-only mode | `EngineSettingsBuilder.DhtReadOnly = true` | [BEP 43](https://www.bittorrent.org/beps/bep_0043.html) |
 | DHT secure node ID (CRC32C) | derived from BEP 24 external IP automatically | [BEP 42](https://www.bittorrent.org/beps/bep_0042.html) |
 | Global tracker injection | `EngineSettingsBuilder.GlobalTrackers` | — |
-| SOCKS5 proxy for peers | `EngineSettingsBuilder.SocksProxy = new IPEndPoint(...)` | — |
+| SOCKS5 proxy for peers, with login | `EngineSettingsBuilder.SocksProxy`, `SocksProxyCredentials` (RFC 1929) | — |
+| uTP transport, shared UDP port with the DHT, uTP first then TCP | `EngineSettingsBuilder.AllowUtp` (default on, off while a SOCKS proxy is set) | [BEP 29](https://www.bittorrent.org/beps/bep_0029.html) |
+| NAT hole punching over uTP (relay and initiator) | `ut_holepunch`, handled automatically | [BEP 55](https://www.bittorrent.org/beps/bep_0055.html) |
+| IPv6 DHT next to the IPv4 one | `EngineSettingsBuilder.DhtEndPointV6`, `ClientEngine.DhtV6` | [BEP 32](https://www.bittorrent.org/beps/bep_0032.html) |
 | Logger IsEnabled guard | skip formatting when logging off | — |
 
 ## NuGet

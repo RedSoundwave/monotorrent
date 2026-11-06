@@ -80,6 +80,12 @@ namespace MonoTorrent.Client
         public bool AllowLocalPeerDiscovery { get; set; }
 
         /// <summary>
+        /// True if peer connections may use uTP (BEP 29) on the listen ports, sharing the UDP socket with the DHT, and
+        /// if NAT hole punching (BEP 55) may be used. Ignored while <see cref="SocksProxy"/> is set. Defaults to <see langword="true"/>.
+        /// </summary>
+        public bool AllowUtp { get; set; }
+
+        /// <summary>
         /// True if the engine should automatically forward ports using any compatible UPnP or NAT-PMP device.
         /// Defaults to <see langword="true"/>.
         /// </summary>
@@ -172,6 +178,12 @@ namespace MonoTorrent.Client
         /// Choose -1 to disable DHT. Defaults to 0.
         /// </summary>
         public IPEndPoint? DhtEndPoint { get; set; }
+
+        /// <summary>
+        /// The UDP endpoint used for IPv6 DHT communications (BEP 32). Use port 0 to choose a random available port.
+        /// Set to null to disable the IPv6 DHT. Defaults to null.
+        /// </summary>
+        public IPEndPoint? DhtEndPointV6 { get; set; }
 
         /// <summary>
         /// When <see cref="EngineSettings.AutoSaveLoadFastResume"/> is true, this setting is used to control how fast
@@ -313,6 +325,11 @@ namespace MonoTorrent.Client
         public IPEndPoint? SocksProxy { get; set; }
 
         /// <summary>
+        /// Optional user name and password for <see cref="SocksProxy"/> (RFC 1929).
+        /// </summary>
+        public NetworkCredential? SocksProxyCredentials { get; set; }
+
+        /// <summary>
         /// The timeout used when connecting to a WebSeed's HTTP endpoint.
         /// </summary>
         public TimeSpan WebSeedConnectionTimeout {
@@ -350,6 +367,7 @@ namespace MonoTorrent.Client
             AllowedEncryption = new List<EncryptionType> (settings.AllowedEncryption);
             AllowHaveSuppression = settings.AllowHaveSuppression;
             AllowLocalPeerDiscovery = settings.AllowLocalPeerDiscovery;
+            AllowUtp = settings.AllowUtp;
             AllowPortForwarding = settings.AllowPortForwarding;
             AutoSaveLoadDhtCache = settings.AutoSaveLoadDhtCache;
             AutoSaveLoadFastResume = settings.AutoSaveLoadFastResume;
@@ -359,6 +377,7 @@ namespace MonoTorrent.Client
             ConnectionTimeouts = new List<TimeSpan> (settings.ConnectionTimeouts);
             DhtBootstrapRouters = new List<BootstrapRouter> (settings.DhtBootstrapRouters);
             DhtEndPoint = settings.DhtEndPoint;
+            DhtEndPointV6 = settings.DhtEndPointV6;
             DhtReadOnly = settings.DhtReadOnly;
             GlobalTrackers = new List<string> (settings.GlobalTrackers);
             DiskCacheBytes = settings.DiskCacheBytes;
@@ -376,6 +395,7 @@ namespace MonoTorrent.Client
             MaximumOpenFiles = settings.MaximumOpenFiles;
             MaximumUploadRate = settings.MaximumUploadRate;
             SocksProxy = settings.SocksProxy;
+            SocksProxyCredentials = settings.SocksProxyCredentials;
             StaleRequestTimeout = settings.StaleRequestTimeout;
             UsePartialFiles = settings.UsePartialFiles;
             WebSeedConnectionTimeout = settings.WebSeedConnectionTimeout;
@@ -413,6 +433,7 @@ namespace MonoTorrent.Client
                 allowedEncryption: AllowedEncryption,
                 allowHaveSuppression: AllowHaveSuppression,
                 allowLocalPeerDiscovery: AllowLocalPeerDiscovery,
+                allowUtp: AllowUtp,
                 allowPortForwarding: AllowPortForwarding,
                 autoSaveLoadDhtCache: AutoSaveLoadDhtCache,
                 autoSaveLoadFastResume: AutoSaveLoadFastResume,
@@ -422,6 +443,7 @@ namespace MonoTorrent.Client
                 connectionTimeouts: ConnectionTimeouts,
                 dhtBootstrapRouters : DhtBootstrapRouters,
                 dhtEndPoint: DhtEndPoint,
+                dhtEndPointV6: DhtEndPointV6,
                 dhtReadOnly: DhtReadOnly,
                 diskCacheBytes: DiskCacheBytes,
                 diskCachePolicy: DiskCachePolicy,
@@ -439,6 +461,7 @@ namespace MonoTorrent.Client
                 maximumUploadRate: MaximumUploadRate,
                 reportedListenEndPoints: ReportedListenEndPoints,
                 socksProxy: SocksProxy,
+                socksProxyCredentials: SocksProxyCredentials,
                 staleRequestTimeout: StaleRequestTimeout,
                 usePartialFiles: UsePartialFiles,
                 webSeedConnectionTimeout: WebSeedConnectionTimeout,

@@ -86,7 +86,7 @@ namespace MonoTorrent.Dht.Tasks
                     await PopulateFirstNodes (initialNodes);
                 } else {
                     try {
-                        var bootstrapRouters = await GenerateBootstrapNodes (BootstrapRouters);
+                        var bootstrapRouters = await GenerateBootstrapNodes (BootstrapRouters, engine.AddressFamily);
                         foreach (var v in bootstrapRouters)
                             engine.RoutingTable.AddIgnoredEndpoint (v.EndPoint);
 
@@ -104,12 +104,13 @@ namespace MonoTorrent.Dht.Tasks
             }
         }
 
-        static async Task<Node[]> GenerateBootstrapNodes (BootstrapRouter[] bootstrapRouters)
+        static async Task<Node[]> GenerateBootstrapNodes (BootstrapRouter[] bootstrapRouters, AddressFamily family)
         {
-            static async Task<CompactEndPoint[]> ResolveRouter (BootstrapRouter router)
+            async Task<CompactEndPoint[]> ResolveRouter (BootstrapRouter router)
             {
-                var addresses = await Dns.GetHostAddressesAsync (router.Host, AddressFamily.InterNetwork);
-                return addresses.Select (t => new CompactEndPoint (t, router.Port))
+                var addresses = await Dns.GetHostAddressesAsync (router.Host, family);
+                return addresses.Where (t => t.AddressFamily == family)
+                    .Select (t => new CompactEndPoint (t, router.Port))
                     .ToArray ();
             }
 
@@ -167,7 +168,7 @@ namespace MonoTorrent.Dht.Tasks
                     // Ping each node we get back to ensure it's alive/reachable. If it responds
                     // it'll be in the table.
                     var response = KrpcMessage.Parse (args.Response);
-                    foreach (Node node in Node.FromCompactNodes (response.Response.Nodes)) {
+                    foreach (Node node in engine.NodesFrom (response.Response)) {
                         var id = TransactionId.NextId ();
                         var request = KrpcMessageEncoder.EncodePing (id, engine.LocalId, engine.IsReadOnly);
                         engine.SendQueryAsync (request, node, pingsChannel.Writer);
@@ -231,7 +232,7 @@ namespace MonoTorrent.Dht.Tasks
                         initializationComplete.TrySetResult (null);
 
                     var response = KrpcMessage.Parse (args.Response);
-                    foreach (Node node in Node.FromCompactNodes (response.Response.Nodes)) {
+                    foreach (Node node in engine.NodesFrom (response.Response)) {
                         if (closestNodes.Add (node)) {
                             var id = TransactionId.NextId ();
                             var request = KrpcMessageEncoder.EncodeFindNode (id, engine.LocalId, target.Span, engine.IsReadOnly);

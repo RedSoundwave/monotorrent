@@ -37,7 +37,11 @@ namespace MonoTorrent.Dht
     {
         internal List<Bucket> Buckets { get; private set; }
 
-        public NodeId LocalNodeId { get; }
+        readonly NodeId localNodeId;
+
+        public NodeId LocalNodeId => localNodeId;
+
+        internal ReadOnlySpan<byte> LocalId => localNodeId.Span;
 
         public bool NeedsBootstrap => CountNodes () < 4;
 
@@ -56,7 +60,7 @@ namespace MonoTorrent.Dht
         public RoutingTable (NodeId localNodeId)
         {
             Buckets = new List<Bucket> ();
-            LocalNodeId = localNodeId;
+            this.localNodeId = localNodeId;
             NodesToIgnore = new HashSet<CompactEndPoint> ();
             Add (new Bucket (NodeId.Minimum, NodeId.Maximum, 32));
         }

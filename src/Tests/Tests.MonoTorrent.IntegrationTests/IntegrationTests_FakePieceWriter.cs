@@ -140,6 +140,35 @@ namespace MonoTorrent.IntegrationTests
         [Test]
         public async Task V2Only () => await CreateAndDownloadTorrent (TorrentType.V2Only);
 
+        [Test]
+        public async Task V1Only_OverUtpWithoutTcp ()
+        {
+            var type = AnyAddress.AddressFamily == AddressFamily.InterNetwork ? "ipv4" : "ipv6";
+            leecherEngine.Dispose ();
+            seederEngine.Dispose ();
+            leecherEngine = GetEngine (FreeTcpAndUdpPort (), Factories.Default.WithPieceWriterCreator (t => LeecherWriter).WithPeerConnectionCreator (type, uri => null!));
+            seederEngine = GetEngine (FreeTcpAndUdpPort (), Factories.Default.WithPieceWriterCreator (t => SeederWriter).WithPeerConnectionCreator (type, uri => null!));
+
+            await CreateAndDownloadTorrent (TorrentType.V1Only);
+        }
+
+        int FreeTcpAndUdpPort ()
+        {
+            for (int attempt = 0; attempt < 50; attempt++) {
+                var tcp = new TcpListener (AnyAddress, 0);
+                tcp.Start ();
+                var port = ((IPEndPoint) tcp.LocalEndpoint).Port;
+                try {
+                    using var udp = new UdpClient (new IPEndPoint (AnyAddress, port));
+                    return port;
+                } catch (SocketException) {
+                } finally {
+                    tcp.Stop ();
+                }
+            }
+            throw new Exception ("No port was free for both TCP and UDP");
+        }
+
         public static int PieceLength = Constants.BlockSize;
         static readonly TimeSpan CancellationTimeout = Debugger.IsAttached ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds (60);
 

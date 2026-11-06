@@ -32,6 +32,8 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -135,7 +137,12 @@ namespace MonoTorrent.Client
             Torrents.Remove (manager);
         }
 
-        async void ConnectToPeer (TorrentManager manager, Peer peer)
+        internal Func<AddressFamily, IUtpSocket?>? UtpProvider { get; set; }
+
+        IUtpSocket? UtpFor (Uri uri)
+            => UtpProvider?.Invoke (uri.Scheme == "ipv6" ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
+
+        async void ConnectToPeer (TorrentManager manager, Peer peer, bool holePunch = false)
         {
             // Whenever we try to connect to a peer, we may try multiple times.
             //  1. If we cannot establish a connection, we bail out. A retry will occur later
@@ -144,7 +151,7 @@ namespace MonoTorrent.Client
             ConnectionFailureReason? failureReason;
             try {
                 manager.Peers.ConnectingToPeers.Add (peer);
-                failureReason = await DoConnectToPeer (manager, peer);
+                failureReason = await DoConnectToPeer (manager, peer, holePunch);
             } catch {
                 failureReason = ConnectionFailureReason.Unknown;
             } finally {
@@ -164,13 +171,30 @@ namespace MonoTorrent.Client
                     manager.Peers.AvailablePeers.Add (peer);
 
                 manager.RaiseConnectionAttemptFailed (new ConnectionAttemptFailedEventArgs (peer.Info, failureReason.Value, manager));
+
+                if (failureReason.Value == ConnectionFailureReason.Unreachable && !holePunch && UtpFor (peer.Info.ConnectionUri) != null)
+                    manager.HolePunch.TryRequestRendezvous (peer);
             }
 
             // Always try to connect to a new peer. If there are no active torrents, the call will just bail out.
             TryConnect ();
         }
 
-        async ReusableTask<ConnectionFailureReason?> DoConnectToPeer (TorrentManager manager, Peer peer)
+        async ReusableTask<ConnectionFailureReason?> DoConnectToPeer (TorrentManager manager, Peer peer, bool holePunch)
+        {
+            var utp = UtpFor (peer.Info.ConnectionUri);
+            if (utp != null && (holePunch || !peer.UtpUnreachable)) {
+                var result = await DoConnectToPeer (manager, peer, utp.CreateConnection);
+                if (result != ConnectionFailureReason.Unreachable || holePunch)
+                    return result;
+                peer.UtpUnreachable = true;
+            } else if (holePunch) {
+                return ConnectionFailureReason.Unreachable;
+            }
+            return await DoConnectToPeer (manager, peer, Factories.CreatePeerConnection);
+        }
+
+        async ReusableTask<ConnectionFailureReason?> DoConnectToPeer (TorrentManager manager, Peer peer, Func<Uri, IPeerConnection?> createConnection)
         {
             ConnectionFailureReason? latestResult = ConnectionFailureReason.Unknown;
             foreach (var allowedEncryption in Settings.OutgoingConnectionEncryptionTiers) {
@@ -179,7 +203,7 @@ namespace MonoTorrent.Client
                     return ConnectionFailureReason.Unknown;
 
                 // Create a new IPeerConnection object for each connection attempt.
-                var connection = Factories.CreatePeerConnection (peer.Info.ConnectionUri);
+                var connection = createConnection (peer.Info.ConnectionUri);
                 if (connection == null)
                     return ConnectionFailureReason.UnknownUriSchema;
 
@@ -518,6 +542,9 @@ namespace MonoTorrent.Client
                             case ExtendedMessageType.LtDontHave:
                                 handler.HandleMessage (peer, new Extended.DontHaveMessage (message));
                                 break;
+                            case ExtendedMessageType.HolePunch:
+                                handler.HandleMessage (peer, new Extended.HolePunchMessage (message));
+                                break;
                             default:
                                 logger.InfoFormatted ("Ignoring unknown extended message type '{0}'", (int) MessageDispatcher.GetExtendedMessageType (message));
                                 break;
@@ -783,6 +810,25 @@ namespace MonoTorrent.Client
             logger.InfoFormatted ("Trying to connect to {0}", peer.Info.ConnectionUri);
             ConnectToPeer (manager, peer);
             return true;
+        }
+
+        internal void ConnectForHolePunch (TorrentManager manager, IPEndPoint endPoint)
+        {
+            if (!manager.Mode.CanAcceptConnections)
+                return;
+
+            var scheme = endPoint.AddressFamily == AddressFamily.InterNetworkV6 ? "ipv6" : "ipv4";
+            var uri = new Uri ($"{scheme}://{endPoint}");
+            if (manager.Peers.ConnectedPeers.Any (t => t.Peer.Info.ConnectionUri == uri) || manager.Peers.ConnectingToPeers.Any (t => t.Info.ConnectionUri == uri))
+                return;
+
+            var peer = manager.Peers.AvailablePeers.FirstOrDefault (t => t.Info.ConnectionUri == uri) ?? new Peer (new PeerInfo (uri));
+            manager.Peers.AvailablePeers.Remove (peer);
+            if (ShouldBanPeer (peer.Info, AttemptConnectionStage.BeforeConnectionEstablished))
+                return;
+
+            logger.InfoFormatted ("Hole punch: connecting to {0}", uri);
+            ConnectToPeer (manager, peer, holePunch: UtpFor (uri) != null);
         }
     }
 }

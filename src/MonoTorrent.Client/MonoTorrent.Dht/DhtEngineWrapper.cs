@@ -58,6 +58,8 @@ namespace MonoTorrent.Client
         public TimeSpan AnnounceInterval => Engine.AnnounceInterval;
         public TimeSpan MinimumAnnounceInterval => Engine.MinimumAnnounceInterval;
 
+        internal DhtEngineWrapper? Companion { get; set; }
+
         public DhtEngineWrapper (IDhtEngine engine)
         {
             Engine = engine;
@@ -67,7 +69,10 @@ namespace MonoTorrent.Client
 
         // BEP 42: delegate external IP to enable compliant node ID generation
         internal void SetExternalIp (System.Net.IPAddress externalIp)
-            => Engine.SetExternalIp (externalIp);
+        {
+            Engine.SetExternalIp (externalIp);
+            Companion?.SetExternalIp (externalIp);
+        }
 
         // BEP 43: delegate read-only mode to the inner DhtEngine
         internal void SetReadOnly (bool value)
@@ -80,8 +85,9 @@ namespace MonoTorrent.Client
             if (State != DhtState.Ready)
                 throw new InvalidOperationException ("You cannot 'Announce' while the dht table is initialising");
 
+            var companionQueued = Companion != null && Companion.State == DhtState.Ready && Companion.TryEnqueueAnnounce (infoHashes, port, token);
             if (!AnnounceConcurrency.Wait (0))
-                return false;
+                return companionQueued;
 
             static async void Announce (IDhtEngine engine, SemaphoreSlim semaphore, InfoHashes infoHashes, int port, CancellationToken token)
             {
@@ -114,8 +120,9 @@ namespace MonoTorrent.Client
             if (State != DhtState.Ready)
                 throw new InvalidOperationException ("You cannot 'GetPeers' while the dht table is initialising");
 
+            var companionQueued = Companion != null && Companion.State == DhtState.Ready && Companion.TryEnqueueGetPeers (infoHashes, token);
             if (!GetPeersConcurrency.Wait (0))
-                return false;
+                return companionQueued;
 
             static async void GetPeers (IDhtEngine engine, SemaphoreSlim semaphore, InfoHashes infoHashes)
             {
@@ -145,8 +152,8 @@ namespace MonoTorrent.Client
         internal ReusableTask StopAsync ()
             => Engine.StopAsync ();
 
-        internal ReusableTask StartAsync (ReadOnlyMemory<byte> readOnlyMemory)
-            => Engine.StartAsync ();
+        internal ReusableTask StartAsync (ReadOnlyMemory<byte> initialNodes)
+            => Engine.StartAsync (initialNodes);
 
         internal ReusableTask AddAsync (IEnumerable<ReadOnlyMemory<byte>> enumerable)
             => Engine.AddAsync (enumerable);
